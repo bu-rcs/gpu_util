@@ -7,6 +7,11 @@
 * Inputs: (User, queue, compute node), time period, multi-GPU, OOD (interactive) vs batch, fully idle jobs
 
 # Meeting notes
+
+*11/25/24*
+- Naming convention for the file names (including intermediate csv); Do we give period of time (start day-end day) or month name.
+- Josh and Katia will create branches and will be working within them
+
 *11/18/24*  
 Schedule
 - Monday 10am-12:30pm every other week
