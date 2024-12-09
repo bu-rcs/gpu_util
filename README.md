@@ -1,3 +1,6 @@
+# Main links:
+- Mike's files: `/project/scv/dugan/gpustats/data`
+
 # Plans
 * Preliminarily: output format CSV (unless output gets very large)
 * Visualization of results
