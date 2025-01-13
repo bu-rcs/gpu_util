@@ -1,6 +1,14 @@
 
 # Meeting notes
 
+*2025-01-13*
+
+- Katia: fix the calculation of the number and % of jobs that do not use GPUs. Need to use comp_tot column
+- Josh: Finalize the names of the columns in the file
+- Katia: for the wallclock (batch vs. interactive) GPU job graphs, add the number of GPUs:
+      - one graph can be stacked (by the number of GPUs used )
+      - the other graph can have y axis gpu-hours (based on the number of GPUs used for the jobs
+
 *12/9/24*
 - Discuss with Charlie what other statistics we need for the Mike's files:
     - memory usage (and probably total memory so it is easier)
