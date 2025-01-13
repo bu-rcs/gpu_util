@@ -88,9 +88,9 @@ plot_job_time_classification(jobs_WC,
 # 'idle_start', 'idle_end', 'idle_mid', 'comp_tot',
 # 'comp_active', 'comp_time', 'comp_frac', 'comp_std'
 print("Number and percentage of jobs that did not utilized GPU at all")
-print( "     Overall: ", sum(df['comp_time'] == 0), " (", round(100* sum(df['comp_time'] == 0)/len(df)), "%)" )
-print( "     Batch: ", sum(df_interactive['comp_time'] == 0), " (", round(100* sum(df_batch['comp_time'] == 0)/len(df_batch)), "%)" )
-print( "     Interactive: ", sum(df_batch['comp_time'] == 0), " (", round(100* sum(df_interactive['comp_time'] == 0)/len(df_interactive)), "%)" )
+print( "     Overall: ", sum(df['comp_tot'] == 0), " (", round(100* sum(df['comp_tot'] == 0)/len(df)), "%)" )
+print( "     Batch: ", sum(df_interactive['comp_tot'] == 0), " (", round(100* sum(df_batch['comp_tot'] == 0)/len(df_batch)), "%)" )
+print( "     Interactive: ", sum(df_batch['comp_tot'] == 0), " (", round(100* sum(df_interactive['comp_tot'] == 0)/len(df_interactive)), "%)" )
 
 
 # %%
