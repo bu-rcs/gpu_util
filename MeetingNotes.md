@@ -8,6 +8,7 @@
 - Katia: for the wallclock (batch vs. interactive) GPU job graphs, add the number of GPUs:
       - one graph can be stacked (by the number of GPUs used )
       - the other graph can have y axis gpu-hours (based on the number of GPUs used for the jobs
+- Note for Katia: number of hosts is not the same as the number of GPUs!
 
 *12/9/24*
 - Discuss with Charlie what other statistics we need for the Mike's files:
