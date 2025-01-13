@@ -25,3 +25,21 @@ for subdir in os.listdir(base_path):
         # Read the file
         with open(file_path, 'r') as f:
             lines = f.readlines()
+
+# Identify all folders belonging to nodes of interest
+# Choose a specific gpustats file as an example to get import options from
+
+# Loop through all folders and compute derived GPU stats node by node
+for i = 1:length(folders)
+    folder = fullfile(base_path, folders{i});
+    G = gpustats_table(folder, start_date
+    stats{i} = compute_stats(G, util_par);
+
+# stats = vertcat(stats{:});
+# Read in accounting file and generate a derived job "name" that 
+# matches the format also used in G
+B = accounting_table(2024);
+rundate = char(datetime(B.ux_start_time, 'ConvertFrom', 'posixtime','TimeZone','America/New_York','Format','yyMM'));
+B.task_number=strcat(B.job_number,'.',B.task_number,'.',rundate);
+
+S = innerjoin(stats,B,'LeftKeys',1,'RightKeys',17);
