@@ -21,11 +21,11 @@ time_period = "January 1 - November 25, 2024"
 
 #%%
 #Explore the input file (can be taken out later)
-print(df.columns)
-print(df.head())
-print(df.tail())
+#print(df.columns)
+#print(df.head())
+#print(df.tail())
 freq_table = df["job_name"].value_counts()
-print(freq_table.head(10))
+#print(freq_table.head(10))
 
 #%%
 # Get values from Josh's slide # 4
@@ -80,6 +80,17 @@ plot_job_time_classification(jobs_WC,
             title="Batch vs. Interactive (OOD or qrsh) job by time",
             subtitle = time_period )
 
+
+
+# %%
+# Calculate the number/percentage of jobs that did not 
+# use GPU at all
+# 'idle_start', 'idle_end', 'idle_mid', 'comp_tot',
+# 'comp_active', 'comp_time', 'comp_frac', 'comp_std'
+print("Number and percentage of jobs that did not utilized GPU at all")
+print( "     Overall: ", sum(df['comp_time'] == 0), " (", round(100* sum(df['comp_time'] == 0)/len(df)), "%)" )
+print( "     Batch: ", sum(df_interactive['comp_time'] == 0), " (", round(100* sum(df_batch['comp_time'] == 0)/len(df_batch)), "%)" )
+print( "     Interactive: ", sum(df_batch['comp_time'] == 0), " (", round(100* sum(df_interactive['comp_time'] == 0)/len(df_interactive)), "%)" )
 
 
 # %%
