@@ -58,7 +58,7 @@ def plot_job_classification(x, title, subtitle):
 
 
 #%%
-def plot_job_time_classification(x, title, subtitle):
+def plot_job_time_classification(x, title, subtitle, y_title="Time, hours"):
     # Create a plot
 
     # parameters
@@ -89,7 +89,7 @@ def plot_job_time_classification(x, title, subtitle):
         fontsize=18,  # Set the font size
         color="black",  # Set the color
         x=0.51,  # Adjust this to align with the subtitle
-        y=1.01,  # Adjust this to align with the subtitle
+        y=1,  # Adjust this to align with the subtitle
     )
 
     # Set the subtitle
@@ -97,10 +97,13 @@ def plot_job_time_classification(x, title, subtitle):
         subtitle,  
         fontsize=14,  # Set the font size
         color="grey",  # Set the color
+        x=0.98, y=-0.3, ha='right', va='bottom'
     )
-
+    
     plt.xlabel("Type of Job")
     plt.ylabel("Time, hours")
     plt.xticks([0, 1], labels=['Batch', 'Interactive'])  # Labeling True and False explicitly
     plt.show()
 
+
+# %%

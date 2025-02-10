@@ -48,3 +48,25 @@ def job_classification(job_name):
     return job_name.str.startswith("ood") | (job_name == "QRLOGIN")
 
 #%%
+def split_string_to_columns(df, column_to_split, new_column_names):
+    """Splits a column in a Pandas DataFrame by periods into new columns.
+
+    Args:
+        df (pd.DataFrame): The DataFrame containing the column to split.
+        column_to_split (str): The name of the column to split.
+        new_column_names (list): A list of names for the new columns.
+
+    Returns:
+        pd.DataFrame: The DataFrame with the new columns added.
+    """
+    split_data = df[column_to_split].str.split('.', n=2, expand=True)
+    
+    if len(new_column_names) != split_data.shape[1]:
+        raise ValueError("The number of new column names must match the number of splits.")
+    
+    for i, name in enumerate(new_column_names):
+      df[name] = split_data[i]
+    
+    # Do not drop the original column
+    #df = df.drop(column_to_split, axis=1)
+    return df
