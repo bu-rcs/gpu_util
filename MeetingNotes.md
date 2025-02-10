@@ -1,6 +1,12 @@
 
 # Meeting notes
 
+*2025-02-10*
+1. Josh ToDo: Add "Task ID" column to the "input" (for Katia) file
+2. Katia ToDo: Process the "input" file correctly to make sure records are not assumed to be jobs, as each recrods correspond to a GPU (so for 4 GPU-job there are 4 records)
+3. Katia: Ask Ryan Gilbert to create a Python function that reads in accounting file as fast as possible.
+4. Josh: Find a "problematic" GPUstats file with missing data/column
+
 *2025-01-13*
 
 - Katia: fix the calculation of the number and % of jobs that do not use GPUs. Need to use comp_tot column
