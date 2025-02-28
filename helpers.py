@@ -75,3 +75,52 @@ def extract_task_id_from_file(filename):
     df["task_id"] = df["job"].astype(str).str.split('.').str[1]
     
     return df
+
+def clean_gpu_data(filepath):
+    """
+    Reads and processes GPU usage data while handling missing values and misaligned JobID.
+
+    The function categorizes GPU usage scenarios based on job assignment:
+    - Scenario 0: GPU unassigned and unused.
+    - Scenario 1: Job ID exists, but user and project are missing (GPU in use).
+    - Scenario 2: Job ID exists, but user and project are marked as "-", indicating idle GPU.
+    - Scenario 3: Job ID appears in the user column due to misalignment.
+
+    Parameters:
+        filepath (str): Path to the GPU usage data file.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing cleaned GPU usage records.
+    """
+    data = []
+
+    with open(filepath, 'r', encoding='utf-8') as file:
+        for line in file:
+            parts = line.split()
+            scenario = 0  # Default scenario: GPU unassigned, unused
+
+            # Extract core metrics
+            time, bus, util, mem_throughput = parts[:4]
+
+            if len(parts) == 5:  
+                # Scenario 3: Job ID misaligned to user column
+                user, proj = "Missing Values", "Missing Values"
+                job_id = parts[4]
+                scenario = 3
+            else:
+                user, proj, job_id = parts[4:7]
+
+                if user == "-" and proj == "-" and job_id != "-":
+                    # Scenario 2: Job ID exists but user/project missing (idle GPU)
+                    user, proj = "Missing Values", "Missing Values"
+                    scenario = 2
+                elif job_id != "-":
+                    # Scenario 1: Job ID exists, GPU is actively in use
+                    scenario = 1
+
+            # Append cleaned record
+            data.append([int(time), bus, float(util), float(mem_throughput), user, proj, job_id, scenario])
+
+    # Create a DataFrame
+    columns = ["time", "bus", "util", "memory_throughput", "user", "project", "job_id", "scenario"]
+    return pd.DataFrame(data, columns=columns)
