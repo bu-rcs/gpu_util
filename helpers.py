@@ -253,5 +253,37 @@ def aggregate_gpu_data(year: str) -> pd.DataFrame:
     )
 
 
-def process_project_gpu_data(year, month, project):
-    raise NotImplementedError
+def process_projects_gpu_data(year: str, month: str, projects: list) -> pd.DataFrame:
+    """
+    Processes GPU usage data for a given year, month, and filters by specified projects.
+
+    Parameters:
+        year (str): Two-digit year string (e.g., "25" for 2025). Must be a two-digit numeric string.
+        month (str): Two-digit month string (e.g., "01" for January). Must be a valid two-digit numeric string from "01" to "12".
+        projects (list): List of project names to filter the data.
+
+    Returns:
+        pd.DataFrame: Filtered DataFrame containing job and GPU usage records for the specified projects.
+
+    Raises:
+        ValueError: If year or month are not properly formatted, or if projects is not a list.
+    """
+    # Validate year format
+    if not isinstance(year, str) or not year.isdigit() or len(year) != 2:
+        raise ValueError(f"Invalid year format: {year}. Expected a two-digit string (e.g., '25' for 2025).")
+
+    # Validate month format
+    if not isinstance(month, str) or not month.isdigit() or len(month) != 2 or not (1 <= int(month) <= 12):
+        raise ValueError(f"Invalid month format: {month}. Expected a two-digit string from '01' to '12'.")
+
+    # Validate projects parameter
+    if not isinstance(projects, list) or not all(isinstance(proj, str) for proj in projects):
+        raise ValueError("Projects must be a list of strings.")
+
+    # Process GPU data for the given year and month
+    full_df = process_gpu_data(year, month)
+
+    # Filter the DataFrame to include only rows where the 'project' column matches the given projects
+    filtered_df = full_df[full_df["project_x"].isin(projects)]
+
+    return filtered_df
