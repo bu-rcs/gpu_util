@@ -94,7 +94,7 @@ def clean_gpu_data(filepath: str) -> pd.DataFrame:
     Reads and processes GPU usage data while handling missing values and misaligned JobID.
 
     The function categorizes GPU usage scenarios based on job assignment:
-    - Scenario 0: GPU unassigned and unused.
+    - Scenario 0: GPU unassigned and unused. NOTE: MAY BE MINOR USAGE - IDLE DRAW?
     - Scenario 1: Job ID exists, but user and project are missing (GPU in use).
     - Scenario 2: Job ID exists, but user and project are marked as "-", indicating idle GPU.
     - Scenario 3: Job ID appears in the user column due to misalignment.
