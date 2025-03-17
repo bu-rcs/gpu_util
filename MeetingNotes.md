@@ -1,6 +1,20 @@
 
 # Meeting notes
 
+*2025-03-17*
+1. Ryan discovered a number of jobs (4102432, 4093245, 4102429, 4102431) that ran around January 29, 2024 (timestamp 1706558401) and are present in gpustat files but are not present in the accounting files. Katia's to do: check these jobs and contact Mike if necessary. Another possibly problematic job: 4086404. Ryan will provide more information on it.
+2. Ryan will add the GPU name (from the file path) to the dataframe that he creates from these files. This will be useful for debugging purposes. Ryan will also use a username to the merging 2 dataset process (as the job ID is recycled a couple times a year).
+3. Ryan will ignore the jobs that are not present in the accounting files (see #1 above) but will report those (as a simple warning message) when merging 2 datasets.
+4. Ryan will create a PDF file with graphs (and possibly some explanatory text) for RCS managers to explore GPU node utilization.
+5. Starting mid-march, Mike added additional columns to his gpustat files. These columns are: memory usage (total, used in MB?), temperature (gpu current temp), power draw. The last 2 columns can be ignored for right now, but include them in the merged dataset. Maybe later we will figure out what these columnd can be used for. Incorporate these additional fields into the merged dataset and starting april (or probably may) we can include their analysis in the "manager" report;
+6. Submit what you have done so far to GitHub (create a pull request)
+7. The additional fields should eventually be added to the user's job report command-line tool. We want to capture:
+   - mean, median, max GPU utilization
+   - mean, median, max GPU memory usage
+   - max GPU idle time
+   - total GPU idle time
+   - start and end GPU idle time
+
 *2025-03-10*
 Present: Katia & Ryan
 1. Ryan completed the standard read python function and created pull request for RCShelpers_py repo (into main branch)
