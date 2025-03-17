@@ -1,7 +1,8 @@
 
 # Meeting notes
 
-*2025-03-17*
+*2025-03-17*   
+Present: Katia & Ryan  
 1. Ryan discovered a number of jobs (4102432, 4093245, 4102429, 4102431) that ran around January 29, 2024 (timestamp 1706558401) and are present in gpustat files but are not present in the accounting files. Katia's to do: check these jobs and contact Mike if necessary. Another possibly problematic job: 4086404. Ryan will provide more information on it.
 2. Ryan will add the GPU name (from the file path) to the dataframe that he creates from these files. This will be useful for debugging purposes. Ryan will also use a username to the merging 2 dataset process (as the job ID is recycled a couple times a year).
 3. Ryan will ignore the jobs that are not present in the accounting files (see #1 above) but will report those (as a simple warning message) when merging 2 datasets.
@@ -15,8 +16,8 @@
    - total GPU idle time
    - start and end GPU idle time
 
-*2025-03-10*
-Present: Katia & Ryan
+*2025-03-10*  
+Present: Katia & Ryan  
 1. Ryan completed the standard read python function and created pull request for RCShelpers_py repo (into main branch)
 2. Pull request for gpu_util (into ryan branch)
 3. Ryan's Todo:
@@ -25,7 +26,7 @@ Present: Katia & Ryan
       - Other items from Katia's list [https://github.com/bu-rcs/gpu_util/blob/katia/Questions.md]
 4. Katia's todo: Check with Mike on "short" lines in gpustats file
 
-*2025-02-24*
+*2025-02-24*  
 Present: Katia & Ryan
 
 1. Generic Python functions that reads all three types of accounting file and returns a list
