@@ -1,8 +1,8 @@
 import subprocess
 import pandas as pd
-from datetime import datetime
 from io import StringIO
 import os
+from joblib import Parallel, delayed
 
 
 def read_gpu_records(filepath: str) -> pd.DataFrame:
@@ -159,94 +159,11 @@ def clean_gpu_data(filepath: str) -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=columns)
 
-def clean_gpu_data_new(filepath: str) -> pd.DataFrame:
-    """
-    Reads and processes GPU usage data while handling missing values, misaligned JobID,
-    and supporting both old and new file formats.
-
-    The function categorizes GPU usage scenarios based on job assignment:
-    - Scenario 0: GPU unassigned and unused. NOTE: MAY BE MINOR USAGE - IDLE DRAW?
-    - Scenario 1: Job ID exists, but user and project are missing (GPU in use).
-    - Scenario 2: Job ID exists, but user and project are marked as "-", indicating idle GPU.
-    - Scenario 3: Job ID appears in the user column due to misalignment.
-
-    Supports both:
-    - Legacy format: time, bus, util, mem_throughput, [user, project, job_id]
-    - New format (mid-March 2025+): time, bus, util, mem_throughput, memory_total, memory_used,
-      temperature, power_draw, [user, project, job_id]
-
-    Parameters:
-        filepath (str): Path to the GPU usage data file.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing cleaned GPU usage records.
-    """
-    data = []
-    columns = [
-        "time", "bus", "util", "memory_throughput", "user", "project", "job_id",
-        "scenario", "memory_total_mb", "memory_used_mb", "temperature", "power_draw"
-    ]
-
-    with open(filepath, "r", encoding="utf-8") as file:
-        for line in file:
-            parts = line.split()
-            scenario = 0  # Default scenario: GPU unassigned, unused
-
-            # Extract core metrics
-            time, bus, util, mem_throughput = parts[:4]
-            memory_values = {"memory_total": "Missing Values", "memory_used": "Missing Values", 
-                             "temperature": "Missing Values", "power_draw": "Missing Values"}
-
-            if len(parts) == 5 or len(parts) == 9:  # Handle misaligned job ID
-                # Scenario 3: Job ID misaligned to user column
-                user, proj = "Missing Values", "Missing Values"
-                job_id = parts[4]
-                scenario = 3
-                
-                if len(parts) == 9:
-                    memory_values["memory_total"] = parts[5]
-                    memory_values["memory_used"] = parts[6]
-                    memory_values["temperature"] = parts[7]
-                    memory_values["power_draw"] = parts[8]
-            else:
-                user, proj, job_id = parts[4:7]
-
-                if user == "-" and proj == "-" and job_id != "-":
-                    # Scenario 2: Job ID exists but user/project missing (idle GPU)
-                    user, proj = "Missing Values", "Missing Values"
-                    scenario = 2
-                elif job_id != "-":
-                    # Scenario 1: Job ID exists, GPU is actively in use
-                    scenario = 1
-
-                if len(parts) == 11:
-                    memory_values["memory_total"] = parts[7]
-                    memory_values["memory_used"] = parts[8]
-                    memory_values["temperature"] = parts[9]
-                    memory_values["power_draw"] = parts[10]
-
-            # Append cleaned record
-            data.append([
-                int(time),
-                bus,
-                float(util),
-                float(mem_throughput),
-                user,
-                proj,
-                job_id,
-                scenario,
-                memory_values["memory_total"],
-                memory_values["memory_used"],
-                memory_values["temperature"],
-                memory_values["power_draw"]
-            ])
-
-    return pd.DataFrame(data, columns=columns)
-
 
 def process_gpu_data(year: str, month: str) -> pd.DataFrame:
     """
-    Processes GPU usage data for a given year and month by merging job records with node statistics.
+    Processes GPU usage data for a given year and month by merging job records with node statistics
+    in parallel using joblib.
 
     Parameters:
         year (str): Two-digit year string (e.g., "25" for 2025).
@@ -272,7 +189,7 @@ def process_gpu_data(year: str, month: str) -> pd.DataFrame:
         f"/projectnb/rcsmetrics/accounting/data/scc/20{year}.csv"
     )
     gpu_jobs["task_string"] = gpu_jobs["task_number"].astype(str)
-    gpu_jobs.loc[~(gpu_jobs["options"].str.contains("-t") | gpu_jobs['task_number'] != 0), "task_string"] = "undefined"
+    gpu_jobs.loc[~(gpu_jobs["options"].str.contains("-t")), "task_string"] = "undefined"
     gpu_jobs["job_task"] = (
         gpu_jobs["job_number"].astype(str) + "." + gpu_jobs["task_string"].astype(str)
     )
@@ -280,35 +197,34 @@ def process_gpu_data(year: str, month: str) -> pd.DataFrame:
     # Get file paths for the specified month
     nodes = os.listdir("/project/scv/dugan/gpustats/data/")
     files = [
-        (node, f"/project/scv/dugan/gpustats/data/{node}/{year}{month}")
+        f"/project/scv/dugan/gpustats/data/{node}/{year}{month}"
         for node in nodes
         if os.path.exists(f"/project/scv/dugan/gpustats/data/{node}/{year}{month}")
     ]
 
-    # Process and merge data
-    all_merged_dfs = []
-    for node, file_name in files:
+    # Determine the number of parallel jobs to use based on NSLOTS environment variable
+    n_jobs = int(os.environ.get("NSLOTS", 1))  # Default to 1 if NSLOTS is not set
+    print(f"Processing in parallel with {n_jobs} cores")
+
+    # Define a function to process each file individually
+    def process_file(file_name):
         try:
             gpu_records = pd.DataFrame(clean_gpu_data(file_name))
+            merged_df = pd.merge(
+                gpu_records, gpu_jobs, left_on="job_id", right_on="job_task", how="left"
+            )
+            return merged_df
         except Exception as e:
             print(f"Skipping missing or corrupted file: {file_name}")
-            continue
+            return pd.DataFrame()  # Return an empty DataFrame if an error occurs
 
-        gpu_records["node"] = node
-
-        # gpu_records_scenario = gpu_records[gpu_records['scenario'] != 0]
-        # merged_df = pd.merge(gpu_records_scenario, gpu_jobs, left_on='job_id', right_on='job_task', how='left')
-        merged_df = pd.merge(
-            gpu_records, gpu_jobs, left_on="job_id", right_on="job_task", how="left"
-        )
-        all_merged_dfs.append(merged_df)
+    # Use joblib to process files in parallel
+    all_merged_dfs = Parallel(n_jobs=n_jobs)(
+        delayed(process_file)(file_name) for file_name in files
+    )
 
     # Return the final concatenated DataFrame
-    return (
-        pd.concat(all_merged_dfs, ignore_index=True)
-        if all_merged_dfs
-        else pd.DataFrame()
-    )
+    return pd.concat(all_merged_dfs, ignore_index=True) if all_merged_dfs else pd.DataFrame()
 
 
 def aggregate_gpu_data(year: str) -> pd.DataFrame:
@@ -338,6 +254,7 @@ def aggregate_gpu_data(year: str) -> pd.DataFrame:
     return (
         pd.concat(all_months_df, ignore_index=True) if all_months_df else pd.DataFrame()
     )
+
 
 def process_projects_gpu_data(year: str, month: str, projects: list) -> pd.DataFrame:
     """
@@ -373,50 +290,3 @@ def process_projects_gpu_data(year: str, month: str, projects: list) -> pd.DataF
     filtered_df = full_df[full_df["project_x"].isin(projects)]
 
     return filtered_df
-
-
-def process_gpu_data_range(start_date: str, end_date: str) -> pd.DataFrame:
-    """
-    Processes GPU usage data for a given date range by calling process_gpu_data 
-    for each month that falls within the range.
-
-    Parameters:
-        start_date (str): Start date in the format "YYYY-MM-DD".
-        end_date (str): End date in the format "YYYY-MM-DD".
-
-    Returns:
-        pd.DataFrame: A merged DataFrame containing job and GPU usage records 
-                      for the entire specified date range.
-    """
-    # Validate date format
-    try:
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-    except ValueError:
-        raise ValueError("Invalid date format. Expected 'YYYY-MM-DD'.")
-
-    # Ensure the start date is before the end date
-    if start_dt > end_dt:
-        raise ValueError("Start date must be earlier than or equal to the end date.")
-
-    # Generate list of (year, month) pairs differently
-    months_to_process = []
-    year, month = start_dt.year, start_dt.month
-
-    while (year, month) <= (end_dt.year, end_dt.month):
-        months_to_process.append((str(year)[-2:], f"{month:02d}"))  # Store last 2 digits of year
-        month += 1
-        if month > 12:  # If we exceed December, roll over to next year
-            month = 1
-            year += 1
-
-    # Process each month and merge results
-    all_dfs = []
-    for year, month in months_to_process:
-        print(f"Processing {year}-{month}...")
-        monthly_df = process_gpu_data(year, month)
-        if not monthly_df.empty:
-            all_dfs.append(monthly_df)
-
-    # Concatenate results
-    return pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame()

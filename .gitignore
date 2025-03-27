@@ -6,6 +6,7 @@ __pycache__/
 # Adding notebook, csv to prevent pushing sensitive data
 *.ipynb
 *.csv
+*.pdf
 
 # C extensions
 *.so
