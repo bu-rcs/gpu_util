@@ -13,13 +13,18 @@ warnings.filterwarnings('ignore')
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Generate GPU utilization report')
-    parser.add_argument('--year', type=str, default="25", help='Year (last two digits, e.g. 25)')
-    parser.add_argument('--month', type=str, default="02", help='Month (two digits, e.g. 02)')
-    parser.add_argument('--output', type=str, default="gpu_utilization_report.pdf", 
-                        help='Output PDF filename')
+    parser.add_argument('-y', '--year', type=str, default="25", 
+                        help='Year (last two digits, e.g. 25)')
+    parser.add_argument('-m', '--month', type=str, default="02", 
+                    help='Month (two digits, e.g. 02)')
+    parser.add_argument('-o', '--output', type=str, default="gpu_utilization_report.pdf", 
+                    help='Output PDF filename')
+    parser.add_argument('-p', '--project', type=str, default=None, 
+                        help='Filter by project name (optional)')
+
     return parser.parse_args()
 
-def create_title_page(pdf, year_month_date):
+def create_title_page(pdf, year_month_date, project=None):
     """Create and save the title page"""
     month_name = year_month_date.strftime("%B")
     year_val = year_month_date.strftime("%Y")
@@ -31,17 +36,21 @@ def create_title_page(pdf, year_month_date):
     fig.text(0.5, 0.65, f"GPU Usage Report", 
             fontsize=28, ha='center', weight='bold', color='#15417E')
 
-    fig.text(0.5, 0.58, f"{month_name} {year_val}", 
+    fig.text(0.5, 0.58, 
+            f"{month_name} {year_val}" + (f" - {project}" if project else ""),
             fontsize=22, ha='center', color='#15417E')
 
     line_ax = fig.add_axes([0.2, 0.55, 0.6, 0.01])
     line_ax.axhline(y=0.5, color='#15417E', linewidth=2)
     line_ax.axis('off')
 
+    project_text = f"For project: {project}\n" if project else ""
+
     info_text = (
         f"This report provides an analysis of GPU usage patterns\n"
-        f"across different job types and execution modes.\n\n"
+        f"across different job types and execution modes.\n"
         f"The dataset covers all GPU jobs run during {month_name} {year_val}.\n"
+        f"{project_text}"
         f"The analysis includes job counts and GPU-hours consumed."
     )
 
@@ -353,10 +362,45 @@ def create_stacked_job_chart(pdf, year_data):
     plt.subplots_adjust(bottom=0.05, hspace=0.5, top=0.95)
     pdf.savefig(fig)
 
+def create_n_gpu_chart(pdf, year_data):
+    """Create number of gpus per job histogram chart"""
+    df = year_data.copy()
+    grouped_df = df.groupby(["owner", "job_id"]).agg({
+        "n_gpu": "first",
+    }).reset_index()
+
+    fig = plt.figure(figsize=(8.5, 11))
+
+    gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1], figure=fig)
+
+    ax = fig.add_subplot(gs[0])
+    sns.histplot(grouped_df['n_gpu'].astype(int), bins=range(1, grouped_df['n_gpu'].astype(int).max() + 1), kde=False, ax=ax, color="purple")
+    ax.set_title("Distribution of GPUs per Job", fontsize=14)
+    ax.set_xlabel("Number of GPUs per Job", fontsize=12)
+    ax.set_ylabel("Frequency", fontsize=12)
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+
+    ax_text = fig.add_subplot(gs[1])
+    ax_text.axis("off")  # Hide axis
+
+    description = (
+        "This histogram shows the distribution of GPUs requested per job. Each bar represents the "
+        "frequency of jobs that requested a specific number of GPUs."
+    )
+
+    ax_text.text(0.5, 0.4, description, fontsize=11, ha='center', va='center', 
+                bbox=dict(facecolor='lightgray', edgecolor='black', boxstyle='round,pad=0.4'),
+                wrap=True, transform=ax_text.transAxes)
+
+    footer = "For internal use — Research Computing Services Team"
+    fig.text(0.5, 0.03, footer, fontsize=8, ha='center', va='center', style='italic')
+    pdf.savefig(fig)
+
+
 def main():
     # Parse command line arguments
     args = parse_arguments()
-    
+
     # Define year and month from arguments
     year, month = args.year, args.month
     
@@ -367,10 +411,15 @@ def main():
     year_month_date = datetime.strptime("20" + year + '-' + month, "%Y-%m")
     
     # Create title page
-    create_title_page(pdf, year_month_date)
+    create_title_page(pdf, year_month_date, args.project)
     
     # Process GPU data
     year_data = process_gpu_data(year, month)
+
+    # If project is specified, we mask the dataframe
+    if args.project:
+        year_data = year_data[year_data['project_y'] == args.project]
+
     print(f"Percent NaN from GPU Util: {float(year_data[year_data['scenario']!=0]['qname'].isna().mean()):.2%}")
     
     # Load and map node status
@@ -392,6 +441,7 @@ def main():
     create_low_utilization_chart(pdf, year_data)
     create_job_type_chart(pdf, year_data)
     create_stacked_job_chart(pdf, year_data)
+    create_n_gpu_chart(pdf, year_data)
     
     # Close the PDF
     pdf.close()
