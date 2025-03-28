@@ -10,7 +10,8 @@ Questions:
 - How to tell if a gpu belongs to shared vs buyin? When idle no qname
 - Jobname recycle, how to tell what user since missing for many?
 - Duplicate values? whats going on? 2024-01-21 22:58:02 weird merging time event?
-- some nans when grouping over entire 2024 year...exploring this
+- some nans when grouping over entire 2024 year...exploring this 153847 vs 137830: 505 jobs?, 3 users
+   - year_2024_01[year_2024_01['owner']=='allenjb']['options'].values
 
 ### 3/10/25
 
