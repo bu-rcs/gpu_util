@@ -12,6 +12,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 def parse_arguments():
+    """Parse command line arguments for report specs"""
     parser = argparse.ArgumentParser(description='Generate GPU utilization report')
     parser.add_argument('-y', '--year', type=str, default="25", 
                         help='Year (last two digits, e.g. 25)')
@@ -21,10 +22,12 @@ def parse_arguments():
                     help='Output PDF filename')
     parser.add_argument('-p', '--project', type=str, default=None, 
                         help='Filter by project name (optional)')
+    parser.add_argument('-u', '--user', type=str, default=None, 
+                        help='Filter by user name (optional)')
 
     return parser.parse_args()
 
-def create_title_page(pdf, year_month_date, project=None):
+def create_title_page(pdf, year_month_date, project=None, user=None):
     """Create and save the title page"""
     month_name = year_month_date.strftime("%B")
     year_val = year_month_date.strftime("%Y")
@@ -37,7 +40,7 @@ def create_title_page(pdf, year_month_date, project=None):
             fontsize=28, ha='center', weight='bold', color='#15417E')
 
     fig.text(0.5, 0.58, 
-            f"{month_name} {year_val}" + (f" - {project}" if project else ""),
+            f"{month_name} {year_val}" + (f" - {project}" if project else "") + (f" - {user}" if user else ""),
             fontsize=22, ha='center', color='#15417E')
 
     line_ax = fig.add_axes([0.2, 0.55, 0.6, 0.01])
@@ -45,12 +48,14 @@ def create_title_page(pdf, year_month_date, project=None):
     line_ax.axis('off')
 
     project_text = f"For project: {project}\n" if project else ""
+    user_text = f"For user: {user}\n" if user else ""
 
     info_text = (
         f"This report provides an analysis of GPU usage patterns\n"
         f"across different job types and execution modes.\n"
         f"The dataset covers all GPU jobs run during {month_name} {year_val}.\n"
         f"{project_text}"
+        f"{user_text}"
         f"The analysis includes job counts and GPU-hours consumed."
     )
 
@@ -68,8 +73,82 @@ def create_title_page(pdf, year_month_date, project=None):
 
     pdf.savefig(fig)
 
+def create_quick_stats_chart(pdf, year_data):
+    # Calculate statistics
+    mean = year_data['util'].mean()
+    median = year_data['util'].median()
+    max_val = year_data['util'].max()
+    idle_perc = (year_data['util'] < 5).mean()
+    idle_hours = (year_data['util'] < 5).sum() / 12
+
+    year_data['reserved'] = year_data['scenario'] != 0
+    year_data['reserved'] = year_data['reserved'].astype(int)
+
+    # Length of jobs
+    job_utilization = year_data.groupby(["owner", "job_id"]).agg({
+        "util": ["mean", lambda x: (x < 5).all()],  # Mean of util and True if all time points were <5%
+        "reserved": "sum",  # Sum of reserved GPU (to compute GPU hours)
+        "project_y": "first",  # Keep project name
+        "job_interactive": "first"  # Execution type
+    }).reset_index()
+
+    # Rename columns to make them more readable
+    job_utilization.columns = ['owner', 'job_id', 'util_mean', 'util_all_below_5', 'reserved', 'project', 'job_interactive']
+
+    # Filter only jobs that were always <5% utilization
+    low_util_jobs = job_utilization[job_utilization["util_all_below_5"]].sort_values(by='reserved', ascending=False)
+    # Convert reserved GPUs into GPU hours
+    low_util_jobs["gpu_hours"] = low_util_jobs["reserved"] / 12
+
+    # Top 5 low utilization jobs
+    top_low_util_jobs = low_util_jobs[['owner', 'job_id', 'util_mean', 'project', 'job_interactive', 'gpu_hours']].head(5)
+
+    title = "Quick Stats"
+    subtitle = "This page was generated as user/project was specified"
+
+    fig = plt.figure(figsize=(8.5, 11))
+    gs = gridspec.GridSpec(2, 1, height_ratios=[1, 2])
+
+    # Title Section
+    fig.text(0.5, 0.90, title, fontsize=18, ha='center', weight='bold')
+    fig.text(0.5, 0.87, subtitle, fontsize=14, ha='center')
+
+    # Text Content Section
+    stats_text = (
+        "GPU Utilization (util/load %) Descriptive Statistics:\n"
+        f"Mean: {mean:.2f}%\n"
+        f"Median: {median:.2f}%\n"
+        f"Max: {max_val:.2f}%\n\n"
+        "GPU Idle (util < 5%) Statistics:\n"
+        f"GPUs were idle for {idle_perc:.2%} of the time\n"
+        f"for a total of {idle_hours:.2f} hours.\n\n"
+        "Here are the top 5 rows for the project/user:"
+    )
+    fig.text(0.5, 0.55, stats_text, ha='center', va='center', fontsize=12, wrap=True)
+
+    # Table Section
+    ax_table = fig.add_subplot(gs[1])
+    ax_table.axis("off")
+
+    # Create table data from the top 5 low utilization jobs
+    table_data = top_low_util_jobs.values.tolist()
+    table_columns = top_low_util_jobs.columns.tolist()
+
+    # Add the table to the plot
+    table = ax_table.table(cellText=table_data, colLabels=table_columns, cellLoc='center', loc='center')
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1.2, 1.2)
+
+    # Footer
+    footer = "For internal use — Research Computing Services Team"
+    fig.text(0.5, 0.03, footer, fontsize=8, ha='center', va='center', style='italic')
+
+    plt.tight_layout()
+    pdf.savefig(fig)
+
 def create_utilization_chart(pdf, year_data):
-    """Create utilization chart"""
+    """Create utilization time series chart"""
     # Add gpu reserved column
     year_data['reserved'] = year_data['scenario'] != 0
     year_data['reserved'] = year_data['reserved'].astype(int)
@@ -396,6 +475,78 @@ def create_n_gpu_chart(pdf, year_data):
     fig.text(0.5, 0.03, footer, fontsize=8, ha='center', va='center', style='italic')
     pdf.savefig(fig)
 
+def create_no_usage_chart(pdf, year_data):
+    """Create gpu no usage gpu hours chart"""
+    
+    # Group by job_id and check if ALL time points for the job were under 5%
+    job_utilization = year_data.groupby(["owner", "job_id"]).agg({
+        "util": lambda x: (x < 5).all(),  # True if all time points were <5%
+        "reserved": "sum",  # Sum of reserved GPU (to compute GPU hours)
+        "project_y": "first",  # Keep project name
+        "job_interactive": "first"  # Execution type
+    }).reset_index()
+
+    # Filter only jobs that were always <5% utilization
+    low_util_jobs = job_utilization[job_utilization["util"]]
+
+    # Convert execution type to readable categories
+    low_util_jobs["execution_type"] = low_util_jobs["job_interactive"].apply(lambda x: "On-Demand/Interactive" if x else "Batch")
+
+    # Convert reserved GPUs into GPU hours
+    low_util_jobs["gpu_hours"] = low_util_jobs["reserved"] / 12
+
+    # Get top 10 users and projects by low-utilization GPU hours
+    low_util_users = low_util_jobs.groupby("owner")["gpu_hours"].sum().nlargest(10)
+    low_util_projects = low_util_jobs.groupby("project_y")["gpu_hours"].sum().nlargest(10)
+
+    # Get breakdown of Interactive vs. Batch for top users
+    low_util_users_breakdown = low_util_jobs[low_util_jobs["owner"].isin(low_util_users.index)]\
+        .groupby(["owner", "execution_type"])["gpu_hours"].sum().unstack(fill_value=0)
+
+    # Get breakdown of Interactive vs. Batch for top projects
+    low_util_projects_breakdown = low_util_jobs[low_util_jobs["project_y"].isin(low_util_projects.index)]\
+        .groupby(["project_y", "execution_type"])["gpu_hours"].sum().unstack(fill_value=0)
+
+    # Sort users and projects by total GPU hours before plotting
+    low_util_users_breakdown = low_util_users_breakdown.loc[low_util_users.index[::-1]]  # Largest on top
+    low_util_projects_breakdown = low_util_projects_breakdown.loc[low_util_projects.index[::-1]]  # Largest on top
+
+    # Create figure for PDF (8.5x11 layout)
+    fig, axes = plt.subplots(2, 1, figsize=(8.5, 11))
+
+    # Define color palette
+    palette = {"On-Demand/Interactive": "skyblue", "Batch": "darkblue"}
+
+    # Plot top users with breakdown
+    low_util_users_breakdown.plot(kind="barh", stacked=True, ax=axes[0], color=palette)
+    axes[0].set_title("Top Users with Low Utilization GPU Hours (Interactive vs Batch)", fontsize=14)
+    axes[0].set_xlabel("Total GPU Hours", fontsize=12)
+    axes[0].set_ylabel("User", fontsize=12)
+    axes[0].legend(title="Job Type", loc="upper right")
+
+    # Plot top projects with breakdown
+    low_util_projects_breakdown.plot(kind="barh", stacked=True, ax=axes[1], color=palette)
+    axes[1].set_title("Top Projects with Low Utilization GPU Hours (Interactive vs Batch)", fontsize=14)
+    axes[1].set_xlabel("Total GPU Hours", fontsize=12)
+    axes[1].set_ylabel("Project", fontsize=12)
+    axes[1].legend(title="Job Type", loc="upper right")
+
+    # Add explanatory text at the bottom
+    text_box = fig.add_axes([0.1, 0.05, 0.8, 0.2])  # Positioning within 8.5x11 layout
+    text_box.text(0.5, 0.5, 
+        "This page highlights GPU hours consumed by jobs that were always under 5% utilization.\n"
+        "Bars are split by job execution type (Interactive vs. Batch).\n\n"
+        "Understanding this breakdown helps identify whether low-utilization jobs\n"
+        "are real-time workloads or batch jobs that might need optimization.",
+        fontsize=12, ha="center", va="center", wrap=True)
+    text_box.set_xticks([])
+    text_box.set_yticks([])
+    text_box.set_frame_on(False)
+
+    # Adjust layout to fit the text
+    plt.tight_layout(rect=[0, 0.2, 1, 1])  # Leave space at bottom for text box
+    pdf.savefig(fig)
+
 
 def main():
     # Parse command line arguments
@@ -411,7 +562,7 @@ def main():
     year_month_date = datetime.strptime("20" + year + '-' + month, "%Y-%m")
     
     # Create title page
-    create_title_page(pdf, year_month_date, args.project)
+    create_title_page(pdf, year_month_date, args.project, args.user)
     
     # Process GPU data
     year_data = process_gpu_data(year, month)
@@ -419,6 +570,10 @@ def main():
     # If project is specified, we mask the dataframe
     if args.project:
         year_data = year_data[year_data['project_y'] == args.project]
+
+    # If user is specified, we mask the dataframe
+    if args.user:
+        year_data = year_data[year_data['owner'] == args.user]
 
     print(f"Percent NaN from GPU Util: {float(year_data[year_data['scenario']!=0]['qname'].isna().mean()):.2%}")
     
@@ -436,12 +591,15 @@ def main():
     year_data['time'] = pd.to_datetime(year_data['time'], unit='s')
     
     # Create charts
+    if args.user or args.project:
+        create_quick_stats_chart(pdf, year_data)
     create_utilization_chart(pdf, year_data)
     create_top_users_chart(pdf, year_data)
     create_low_utilization_chart(pdf, year_data)
     create_job_type_chart(pdf, year_data)
     create_stacked_job_chart(pdf, year_data)
     create_n_gpu_chart(pdf, year_data)
+    create_no_usage_chart(pdf, year_data)
     
     # Close the PDF
     pdf.close()

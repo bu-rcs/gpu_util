@@ -4,7 +4,8 @@
 3. added nan percent warning to visuals.ipynb. can be also included in the helper function or pdf generation  
 4. created pdf file, what other things to add?  
 5. update function to support old + new mike gpu util files  
-6.
+6. todo: fix branch, new PR  
+7. can generate report for specific year month, project (optional), user (optional), "Quick Stats" page generated if specified
 
 Questions:  
 - How to tell if a gpu belongs to shared vs buyin? When idle no qname
@@ -12,6 +13,8 @@ Questions:
 - Duplicate values? whats going on? 2024-01-21 22:58:02 weird merging time event?
 - some nans when grouping over entire 2024 year...exploring this 153847 vs 137830: 505 jobs?, 3 users
    - year_2024_01[year_2024_01['owner']=='allenjb']['options'].values
+   - causes some issues with generating report for whole year  
+- one user requested 4 gpus and held an interactive session open for 48 hours 4 times last month! maybe this can be monitored!
 
 ### 3/10/25
 
