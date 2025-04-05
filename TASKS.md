@@ -8,7 +8,7 @@ Ryan's notes todo:
 - x proportions for squashed chart doesnt look great
 - x gpu hist numbers
 - x Utilization graph over only shared nodes
-- sahares vs buyin last graph
+- x sahares vs buyin last graph
 - quick stats undefined task id, truncate decimals
 - refine descriptions throughout, removing bboxes
 - CHECK old function on new month data, does new columns mess with logic?

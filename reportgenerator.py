@@ -149,6 +149,84 @@ def create_quick_stats_chart(pdf, year_data):
     plt.tight_layout()
     pdf.savefig(fig)
 
+def create_quick_stats_chart(pdf, year_data):
+
+    # Calculate statistics
+    mean = year_data['util'].mean()
+    median = year_data['util'].median()
+    max_val = year_data['util'].max()
+    idle_perc = (year_data['util'] < 5).mean()
+    idle_hours = (year_data['util'] < 5).sum() / 12
+
+    year_data['reserved'] = year_data['scenario'] != 0
+    year_data['reserved'] = year_data['reserved'].astype(int)
+
+    # Length of jobs
+    job_utilization = year_data.groupby(["owner", "job_id"]).agg({
+        "util": ["mean", lambda x: (x < 5).all()],
+        "reserved": "sum",
+        "project_y": "first",
+        "job_interactive": "first"
+    }).reset_index()
+
+    job_utilization.columns = ['owner', 'job_id', 'util_mean', 'util_all_below_5', 'reserved', 'project', 'job_interactive']
+
+    low_util_jobs = job_utilization[job_utilization["util_all_below_5"]].sort_values(by='reserved', ascending=False)
+    low_util_jobs["gpu_hours"] = low_util_jobs["reserved"] / 12
+
+    top_low_util_jobs = low_util_jobs[['owner', 'job_id', 'util_mean', 'project', 'job_interactive', 'gpu_hours']].head(5)
+
+    # Clean the table for display
+    def clean_value(val):
+        if isinstance(val, str) and '.undefined' in val:
+            return val.replace('.undefined', '.0')
+        elif isinstance(val, float):
+            return f"{val:.2f}"
+        return val
+
+    # Apply cleaning to each cell in the table
+    cleaned_table_data = top_low_util_jobs.applymap(clean_value).values.tolist()
+    table_columns = top_low_util_jobs.columns.tolist()
+
+    # --- Plotting ---
+    title = "Quick Stats"
+    subtitle = "This page was generated as user/project was specified"
+
+    fig = plt.figure(figsize=(8.5, 11))
+    gs = gridspec.GridSpec(2, 1, height_ratios=[1, 2])
+
+    # Title Section
+    fig.text(0.5, 0.90, title, fontsize=18, ha='center', weight='bold')
+    fig.text(0.5, 0.87, subtitle, fontsize=14, ha='center')
+
+    stats_text = (
+        "GPU Utilization (util/load %) Descriptive Statistics:\n"
+        f"Mean: {mean:.2f}%\n"
+        f"Median: {median:.2f}%\n"
+        f"Max: {max_val:.2f}%\n\n"
+        "GPU Idle (util < 5%) Statistics:\n"
+        f"GPUs were idle for {idle_perc:.2%} of the time\n"
+        f"for a total of {idle_hours:.2f} hours.\n\n"
+        "Here are the top 5 rows for the project/user:"
+    )
+    fig.text(0.5, 0.55, stats_text, ha='center', va='center', fontsize=12, wrap=True)
+
+    # Table Section
+    ax_table = fig.add_subplot(gs[1])
+    ax_table.axis("off")
+
+    table = ax_table.table(cellText=cleaned_table_data, colLabels=table_columns, cellLoc='center', loc='center')
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1.2, 1.2)
+
+    # Footer
+    footer = "For internal use — Research Computing Services Team"
+    fig.text(0.5, 0.03, footer, fontsize=8, ha='center', va='center', style='italic')
+
+    plt.tight_layout()
+    pdf.savefig(fig)
+
 
 def create_utilization_chart(pdf, year_data):
     """Create utilization time series chart"""
@@ -878,6 +956,12 @@ def main():
     # Process GPU data
     year_data = process_gpu_data(year, month)
 
+    # Get shared/buyin data
+    host_owner = get_cluster_node_info()
+    host_owner = host_owner[["host", "flag"]]
+    host_owner.columns = ["node", "sb_flag"]
+    year_data = year_data.merge(host_owner, on="node")
+
     # If project is specified, we mask the dataframe
     if args.project:
         year_data = year_data[year_data['project_y'] == args.project]
@@ -907,7 +991,8 @@ def main():
     create_utilization_chart(pdf, year_data)
     plot_shared_gpu_utilization(pdf, year_data)
     create_top_users_chart(pdf, year_data)
-    create_usage_breakdown_charts(pdf, year_data)
+    if not (args.user or args.project):
+        create_usage_breakdown_charts(pdf, year_data)
     create_low_utilization_chart(pdf, year_data)
     create_low_utilization_chart_by_class(pdf, year_data)
     create_job_type_chart(pdf, year_data)
