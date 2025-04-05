@@ -1,3 +1,27 @@
+### Post 3/31/25  
+Ryan's notes todo:  
+- x rename reserved
+- x rename second chart to gpu hours 
+- x top users/projects for shared/buyin
+- x repeat low 5% for shared
+- x add numbers on top of bars (done for n gpu, is it really needed for others?)
+- proportions for squashed chart
+- gpu hist numbers
+- sahares vs buyin last graph
+- quick stats undefined task id, truncate decimals
+- refine descriptions throughout, removing bboxes
+- CHECK old function on new month data, does new columns mess with logic?
+- can explore more into gpu util based on katia node file for understanding who gpu belongs to
+- output duplicates warning
+- FIGURE OUT jobid RECYCLE! Fillforward user/project?
+- reproduce duplicate rows in accounting?
+- explore nans as below from last meeting questions
+- explore this issue: python reportgenerator.py -y 25 -m 03  
+Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-e02/2503  
+Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-306/2503  
+- function to save merged dataset from date to date
+- plan rag project
+
 ### Post 3/18/25
 1. grep ,4086404 /projectnb/rcsmetrics/accounting/data/scc/2024.csv -> scc-ye2 has no gpu, but recorded  
 2. added node name. did not add username to merge since it can be missing for many values. alternative?  
@@ -8,9 +32,9 @@
 7. can generate report for specific year month, project (optional), user (optional), "Quick Stats" page generated if specified
 
 Questions:  
-- How to tell if a gpu belongs to shared vs buyin? When idle no qname
-- Jobname recycle, how to tell what user since missing for many?
-- Duplicate values? whats going on? 2024-01-21 22:58:02 weird merging time event?
+- How to tell if a gpu belongs to shared vs buyin? When idle no qname: Katia node file
+- Jobname recycle, how to tell what user since missing for many?: find jobids that are less, these are recycled, these are sep dates. fill in user/owner by looking at same month node file to find it, correction algorithm only on recycled job ids
+- Duplicate values? whats going on? 2024-01-21 22:58:02 weird merging time event? - get code to reproduce
 - some nans when grouping over entire 2024 year...exploring this 153847 vs 137830: 505 jobs?, 3 users
    - year_2024_01[year_2024_01['owner']=='allenjb']['options'].values
    - causes some issues with generating report for whole year  

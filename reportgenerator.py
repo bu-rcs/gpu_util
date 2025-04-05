@@ -174,9 +174,9 @@ def create_utilization_chart(pdf, year_data):
     ax = fig.add_subplot(gs[0])
     
     sns.lineplot(x=gpu_util_hourly.index, y=gpu_util_hourly_smooth.values, 
-                color="blue", label="Reserved GPU Utilization (Smoothed)", ax=ax)
+                color="blue", label="Allocated GPU Utilization (Smoothed)", ax=ax)
     ax.axhline(gpu_util_hourly_smooth.mean(), color="blue", linestyle="dashed", 
-              linewidth=1, label="Reserved Utilization Avg")
+              linewidth=1, label="Allocated Utilization Avg")
     
     sns.lineplot(x=gpu_util_hourly_util_smooth.index, y=gpu_util_hourly_util_smooth.values, 
                 color="red", label="Percent GPU Utilization (Smoothed)", ax=ax)
@@ -185,7 +185,7 @@ def create_utilization_chart(pdf, year_data):
     
     ax.set_xlabel("Time")
     ax.set_ylabel("GPU Utilization (%)")
-    ax.set_title("Overall Hourly GPU Reserved vs. Percent Utilization (Smoothed)")
+    ax.set_title("Overall Hourly GPU Allocation vs. Percent Utilization (Smoothed)")
     ax.legend(title="Legend", loc="upper right", frameon=True)
     ax.grid(True)
     plt.xticks(rotation=45)
@@ -195,7 +195,7 @@ def create_utilization_chart(pdf, year_data):
     
     description = (
         "This chart provides an overview of GPU utilization trends over time. "
-        "The blue line represents the reserved GPU utilization, which reflects job allocations, while the red line "
+        "The blue line represents the allocated GPU utilization, which reflects job allocations, while the red line "
         "shows the actual percentage of GPU utilization. The dashed lines indicate the average utilization for each metric. "
     )
     
@@ -224,14 +224,14 @@ def create_top_users_chart(pdf, year_data):
     
     sns.barplot(x=top_users.values / 12, y=top_users.index, ax=ax1, palette="Blues_r")
     ax1.set_title("Top 10 Users by GPU Utilization", fontsize=14)
-    ax1.set_xlabel("Total GPU Utilization (Hours)", fontsize=12)
+    ax1.set_xlabel("GPU Hours", fontsize=12)
     ax1.set_ylabel("User", fontsize=12)
     
     ax2 = fig.add_subplot(gs[1])
     
     sns.barplot(x=top_projects.values / 12, y=top_projects.index, ax=ax2, palette="Greens_r")
     ax2.set_title("Top 10 Projects by GPU Utilization", fontsize=14)
-    ax2.set_xlabel("Total GPU Utilization (Hours)", fontsize=12)
+    ax2.set_xlabel("GPU Hours", fontsize=12)
     ax2.set_ylabel("Project", fontsize=12)
     
     ax3 = fig.add_subplot(gs[2])
@@ -253,6 +253,89 @@ def create_top_users_chart(pdf, year_data):
     fig.text(0.5, 0.03, footer, fontsize=8, ha='center', va='center', style='italic')
     
     plt.tight_layout()
+    pdf.savefig(fig)
+
+def create_usage_breakdown_charts(pdf, year_data):
+    """Create charts breaking down GPU hours by users and projects, also by shared or buy-in resources."""
+
+    # Group by job_id and calculate GPU hours
+    job_utilization = year_data.groupby(["owner", "job_id"]).agg({
+        "util": "mean",  # Mean of util
+        "reserved": "sum",  # Sum of reserved GPU (to compute GPU hours)
+        "project_y": "first",  # Keep project name
+        "class_own": "first",  # Shared or Buy-in
+    }).reset_index()
+
+    # Convert class ownership to readable categories
+    job_utilization["class_type"] = job_utilization["class_own"].apply(lambda x: "Shared" if x == "shared" else "Buy-in")
+
+    # Convert reserved GPUs into GPU hours
+    job_utilization["gpu_hours"] = job_utilization["reserved"] / 12
+
+    # Separate data into buy-in and shared jobs
+    buy_in_jobs = job_utilization[job_utilization["class_type"] == "Buy-in"]
+    shared_jobs = job_utilization[job_utilization["class_type"] == "Shared"]
+
+    # Get top 10 users and projects by GPU hours for buy-in jobs
+    top_buy_in_users = buy_in_jobs.groupby("owner")["gpu_hours"].sum().nlargest(10)
+    top_buy_in_projects = buy_in_jobs.groupby("project_y")["gpu_hours"].sum().nlargest(10)
+
+    # Get top 10 users and projects by GPU hours for shared jobs
+    top_shared_users = shared_jobs.groupby("owner")["gpu_hours"].sum().nlargest(10)
+    top_shared_projects = shared_jobs.groupby("project_y")["gpu_hours"].sum().nlargest(10)
+
+    # Sort users and projects by total GPU hours before plotting
+    top_buy_in_users = top_buy_in_users.sort_values(ascending=True)  # Smallest on top
+    top_buy_in_projects = top_buy_in_projects.sort_values(ascending=True)  # Smallest on top
+    top_shared_users = top_shared_users.sort_values(ascending=True)  # Smallest on top
+    top_shared_projects = top_shared_projects.sort_values(ascending=True)  # Smallest on top
+
+    # Create figure for PDF (8.5x11 layout)
+    fig, axes = plt.subplots(2, 2, figsize=(8.5, 11))
+
+    # Define color palette
+    palette = ["skyblue"]
+
+    # Plot top buy-in users
+    top_buy_in_users.plot(kind="barh", ax=axes[0, 0], color=palette)
+    axes[0, 0].set_title("Top Users by Buy-in GPU Hours", fontsize=14)
+    axes[0, 0].set_xlabel("Total GPU Hours", fontsize=12)
+    axes[0, 0].set_ylabel("User", fontsize=12)
+
+    # Plot top buy-in projects
+    top_buy_in_projects.plot(kind="barh", ax=axes[0, 1], color=palette)
+    axes[0, 1].set_title("Top Projects by Buy-in GPU Hours", fontsize=14)
+    axes[0, 1].set_xlabel("Total GPU Hours", fontsize=12)
+    axes[0, 1].set_ylabel("Project", fontsize=12)
+
+    # Plot top shared users
+    top_shared_users.plot(kind="barh", ax=axes[1, 0], color=palette)
+    axes[1, 0].set_title("Top Users by Shared GPU Hours", fontsize=14)
+    axes[1, 0].set_xlabel("Total GPU Hours", fontsize=12)
+    axes[1, 0].set_ylabel("User", fontsize=12)
+
+    # Plot top shared projects
+    top_shared_projects.plot(kind="barh", ax=axes[1, 1], color=palette)
+    axes[1, 1].set_title("Top Projects by Shared GPU Hours", fontsize=14)
+    axes[1, 1].set_xlabel("Total GPU Hours", fontsize=12)
+    axes[1, 1].set_ylabel("Project", fontsize=12)
+
+    # Add explanatory text at the bottom
+    text_box = fig.add_axes([0.1, 0.05, 0.8, 0.1])  # Positioning within 8.5x11 layout
+    text_box.text(0.5, 0.5, 
+        "This page highlights GPU hours consumed by users and projects.\n"
+        "Bars are split by class type (Buy-in vs Shared).\n\n"
+        "Understanding this breakdown helps identify resource allocation patterns\n"
+        "and optimize GPU usage for different workloads, whether the job was on shared or buy-in.",
+        fontsize=12, ha="center", va="center", wrap=True)
+    text_box.set_xticks([])
+    text_box.set_yticks([])
+    text_box.set_frame_on(False)
+
+    footer = "For internal use — Research Computing Services Team"
+    fig.text(0.5, 0.03, footer, fontsize=8, ha='center', va='center', style='italic')
+    # Adjust layout to fit the text
+    plt.tight_layout(rect=[0, 0.2, 1, 1])  # Leave space at bottom for text box
     pdf.savefig(fig)
 
 def create_low_utilization_chart(pdf, year_data):
@@ -305,6 +388,72 @@ def create_low_utilization_chart(pdf, year_data):
     fig.text(0.5, 0.03, footer, fontsize=8, ha='center', va='center', style='italic')
     
     plt.tight_layout()
+    pdf.savefig(fig)
+
+def create_low_utilization_chart_by_class(pdf, year_data):
+    """Create low utilization chart split by shared vs buy-in"""
+    # Filter data for low utilization
+    low_util_data = year_data[(year_data['util'] <= 5) & (year_data['scenario'] != 0)]
+    low_util_data['class_type'] = low_util_data['class_own'].apply(lambda x: "Shared" if x == "shared" else "Buy-in")
+
+    # Group by owner and class type
+    zero_util_users = low_util_data.groupby(['owner', 'class_type']).size().reset_index(name='zero_util_count')
+    # Group by project and class type
+    zero_util_projects = low_util_data.groupby(['project_y', 'class_type']).size().reset_index(name='zero_util_count')
+
+    # Calculate hours from counts
+    zero_util_users['zero_util_count'] /= 12
+    zero_util_projects['zero_util_count'] /= 12
+
+    # Separate data by class type
+    zero_util_users_shared = zero_util_users[zero_util_users['class_type'] == 'Shared'].sort_values('zero_util_count', ascending=False).head(10)
+    zero_util_users_buyin = zero_util_users[zero_util_users['class_type'] == 'Buy-in'].sort_values('zero_util_count', ascending=False).head(10)
+    zero_util_projects_shared = zero_util_projects[zero_util_projects['class_type'] == 'Shared'].sort_values('zero_util_count', ascending=False).head(10)
+    zero_util_projects_buyin = zero_util_projects[zero_util_projects['class_type'] == 'Buy-in'].sort_values('zero_util_count', ascending=False).head(10)
+
+    sns.set_theme(style="whitegrid")
+
+    fig, axes = plt.subplots(2, 2, figsize=(8.5, 11))
+
+    # Plot top buy-in users
+    sns.barplot(x='zero_util_count', y='owner', data=zero_util_users_buyin, palette='Reds_d', ax=axes[0, 0])
+    axes[0, 0].set_title('Top 10 Users with Low Buy-in GPU Utilization', fontsize=12)
+    axes[0, 0].set_xlabel('Low Utilization Hours', fontsize=10)
+    axes[0, 0].set_ylabel('User', fontsize=10)
+
+    # Plot top buy-in projects
+    sns.barplot(x='zero_util_count', y='project_y', data=zero_util_projects_buyin, palette='Oranges_d', ax=axes[0, 1])
+    axes[0, 1].set_title('Top 10 Projects with Low Buy-in GPU Utilization', fontsize=12)
+    axes[0, 1].set_xlabel('Low Utilization Hours', fontsize=10)
+    axes[0, 1].set_ylabel('Project', fontsize=10)
+
+    # Plot top shared users
+    sns.barplot(x='zero_util_count', y='owner', data=zero_util_users_shared, palette='Blues_d', ax=axes[1, 0])
+    axes[1, 0].set_title('Top 10 Users with Low Shared GPU Utilization', fontsize=12)
+    axes[1, 0].set_xlabel('Low Utilization Hours', fontsize=10)
+    axes[1, 0].set_ylabel('User', fontsize=10)
+
+    # Plot top shared projects
+    sns.barplot(x='zero_util_count', y='project_y', data=zero_util_projects_shared, palette='Greens_d', ax=axes[1, 1])
+    axes[1, 1].set_title('Top 10 Projects with Low Shared GPU Utilization', fontsize=12)
+    axes[1, 1].set_xlabel('Low Utilization Hours', fontsize=10)
+    axes[1, 1].set_ylabel('Project', fontsize=10)
+
+    # Add explanatory text at the bottom
+    text_box = fig.add_axes([0.1, 0.01, 0.8, 0.1])  # Positioning within 8.5x11 layout
+    text_box.text(0.5, 0.5, 
+        "This page highlights GPU hours consumed by users and projects with low utilization (<5%).\n"
+        "Charts are split by class type (Buy-in vs Shared).",
+        fontsize=10, ha="center", va="center", wrap=True)
+    text_box.set_xticks([])
+    text_box.set_yticks([])
+    text_box.set_frame_on(False)
+
+    # Footer
+    footer = "For internal use — Research Computing Services Team"
+    fig.text(0.5, 0.03, footer, fontsize=8, ha='center', va='center', style='italic')
+
+    plt.tight_layout(rect=[0, 0.1, 1, 1])  # Leave space at bottom for text box
     pdf.savefig(fig)
 
 def create_job_type_chart(pdf, year_data):
@@ -453,11 +602,17 @@ def create_n_gpu_chart(pdf, year_data):
     gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1], figure=fig)
 
     ax = fig.add_subplot(gs[0])
-    sns.histplot(grouped_df['n_gpu'].astype(int), bins=range(1, grouped_df['n_gpu'].astype(int).max() + 1), kde=False, ax=ax, color="purple")
+    hist = sns.histplot(grouped_df['n_gpu'].astype(int), bins=range(1, grouped_df['n_gpu'].astype(int).max() + 1), kde=False, ax=ax, color="purple")
     ax.set_title("Distribution of GPUs per Job", fontsize=14)
     ax.set_xlabel("Number of GPUs per Job", fontsize=12)
     ax.set_ylabel("Frequency", fontsize=12)
     ax.grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Add numbers on top of the bars
+    for p in hist.patches:
+        height = p.get_height()
+        ax.annotate(f'{int(height)}', (p.get_x() + p.get_width() / 2., height),
+                    ha='center', va='center', xytext=(0, 5), textcoords='offset points', fontsize=10, color='black')
 
     ax_text = fig.add_subplot(gs[1])
     ax_text.axis("off")  # Hide axis
@@ -543,8 +698,89 @@ def create_no_usage_chart(pdf, year_data):
     text_box.set_yticks([])
     text_box.set_frame_on(False)
 
+    footer = "For internal use — Research Computing Services Team"
+    fig.text(0.5, 0.03, footer, fontsize=8, ha='center', va='center', style='italic')
+
     # Adjust layout to fit the text
     plt.tight_layout(rect=[0, 0.2, 1, 1])  # Leave space at bottom for text box
+    pdf.savefig(fig)
+
+def create_no_usage_chart_by_class(pdf, year_data):
+    """Create GPU no usage GPU hours chart split by shared vs buy-in"""
+
+    # Group by job_id and check if ALL time points for the job were under 5%
+    job_utilization = year_data.groupby(["owner", "job_id"]).agg({
+        "util": lambda x: (x < 5).all(),  # True if all time points were <5%
+        "reserved": "sum",  # Sum of reserved GPU (to compute GPU hours)
+        "project_y": "first",  # Keep project name
+        "class_own": "first",  # Shared or Buy-in
+        "job_interactive": "first"  # Execution type
+    }).reset_index()
+
+    # Filter only jobs that were always <5% utilization
+    low_util_jobs = job_utilization[job_utilization["util"]]
+
+    # Convert class ownership to readable categories
+    low_util_jobs["class_type"] = low_util_jobs["class_own"].apply(lambda x: "Shared" if x == "shared" else "Buy-in")
+
+    # Convert reserved GPUs into GPU hours
+    low_util_jobs["gpu_hours"] = low_util_jobs["reserved"] / 12
+
+    # Separate data into buy-in and shared jobs
+    buy_in_jobs = low_util_jobs[low_util_jobs["class_type"] == "Buy-in"]
+    shared_jobs = low_util_jobs[low_util_jobs["class_type"] == "Shared"]
+
+    # Get top 10 users and projects by low-utilization GPU hours for buy-in jobs
+    top_buy_in_users = buy_in_jobs.groupby("owner")["gpu_hours"].sum().nlargest(10)
+    top_buy_in_projects = buy_in_jobs.groupby("project_y")["gpu_hours"].sum().nlargest(10)
+
+    # Get top 10 users and projects by low-utilization GPU hours for shared jobs
+    top_shared_users = shared_jobs.groupby("owner")["gpu_hours"].sum().nlargest(10)
+    top_shared_projects = shared_jobs.groupby("project_y")["gpu_hours"].sum().nlargest(10)
+
+    sns.set_theme(style="whitegrid")
+
+    fig, axes = plt.subplots(2, 2, figsize=(8.5, 11))
+
+    # Plot top buy-in users
+    sns.barplot(x='gpu_hours', y=top_buy_in_users.index, data=top_buy_in_users.reset_index(), palette='Reds_d', ax=axes[0, 0])
+    axes[0, 0].set_title('Top 10 Users with Low Buy-in GPU Utilization', fontsize=12)
+    axes[0, 0].set_xlabel('Low Utilization Hours', fontsize=10)
+    axes[0, 0].set_ylabel('User', fontsize=10)
+
+    # Plot top buy-in projects
+    sns.barplot(x='gpu_hours', y=top_buy_in_projects.index, data=top_buy_in_projects.reset_index(), palette='Oranges_d', ax=axes[0, 1])
+    axes[0, 1].set_title('Top 10 Projects with Low Buy-in GPU Utilization', fontsize=12)
+    axes[0, 1].set_xlabel('Low Utilization Hours', fontsize=10)
+    axes[0, 1].set_ylabel('Project', fontsize=10)
+
+    # Plot top shared users
+    sns.barplot(x='gpu_hours', y=top_shared_users.index, data=top_shared_users.reset_index(), palette='Blues_d', ax=axes[1, 0])
+    axes[1, 0].set_title('Top 10 Users with Low Shared GPU Utilization', fontsize=12)
+    axes[1, 0].set_xlabel('Low Utilization Hours', fontsize=10)
+    axes[1, 0].set_ylabel('User', fontsize=10)
+
+    # Plot top shared projects
+    sns.barplot(x='gpu_hours', y=top_shared_projects.index, data=top_shared_projects.reset_index(), palette='Greens_d', ax=axes[1, 1])
+    axes[1, 1].set_title('Top 10 Projects with Low Shared GPU Utilization', fontsize=12)
+    axes[1, 1].set_xlabel('Low Utilization Hours', fontsize=10)
+    axes[1, 1].set_ylabel('Project', fontsize=10)
+
+    # Add explanatory text at the bottom
+    text_box = fig.add_axes([0.1, 0.01, 0.8, 0.1])  # Positioning within 8.5x11 layout
+    text_box.text(0.5, 0.5, 
+        "This page highlights GPU hours consumed by jobs that were always under 5% utilization.\n"
+        "Charts are split by class type (Buy-in vs Shared).",
+        fontsize=10, ha="center", va="center", wrap=True)
+    text_box.set_xticks([])
+    text_box.set_yticks([])
+    text_box.set_frame_on(False)
+
+    # Footer
+    footer = "For internal use — Research Computing Services Team"
+    fig.text(0.5, 0.03, footer, fontsize=8, ha='center', va='center', style='italic')
+
+    plt.tight_layout(rect=[0, 0.1, 1, 1])  # Leave space at bottom for text box
     pdf.savefig(fig)
 
 
@@ -595,11 +831,14 @@ def main():
         create_quick_stats_chart(pdf, year_data)
     create_utilization_chart(pdf, year_data)
     create_top_users_chart(pdf, year_data)
+    create_usage_breakdown_charts(pdf, year_data)
     create_low_utilization_chart(pdf, year_data)
+    create_low_utilization_chart_by_class(pdf, year_data)
     create_job_type_chart(pdf, year_data)
     create_stacked_job_chart(pdf, year_data)
     create_n_gpu_chart(pdf, year_data)
     create_no_usage_chart(pdf, year_data)
+    create_no_usage_chart_by_class(pdf, year_data)
     
     # Close the PDF
     pdf.close()
