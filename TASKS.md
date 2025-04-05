@@ -5,8 +5,9 @@ Ryan's notes todo:
 - x top users/projects for shared/buyin
 - x repeat low 5% for shared
 - x add numbers on top of bars (done for n gpu, is it really needed for others?)
-- proportions for squashed chart
-- gpu hist numbers
+- x proportions for squashed chart doesnt look great
+- x gpu hist numbers
+- x Utilization graph over only shared nodes
 - sahares vs buyin last graph
 - quick stats undefined task id, truncate decimals
 - refine descriptions throughout, removing bboxes
