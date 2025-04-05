@@ -474,9 +474,7 @@ def create_usage_breakdown_charts(pdf, year_data):
     text_box = fig.add_axes([0.1, 0.05, 0.8, 0.1])  # Positioning within 8.5x11 layout
     text_box.text(0.5, 0.5, 
         "This page highlights GPU hours consumed by users and projects.\n"
-        "Bars are split by class type (Buy-in vs Shared).\n\n"
-        "Understanding this breakdown helps identify resource allocation patterns\n"
-        "and optimize GPU usage for different workloads, whether the job was on shared or buy-in.",
+        "Bars are split by class type (Buy-in vs Shared).",
         fontsize=12, ha="center", va="center", wrap=True)
     text_box.set_xticks([])
     text_box.set_yticks([])
@@ -526,8 +524,7 @@ def create_low_utilization_chart(pdf, year_data):
         "This visualization identifies inefficient GPU resource allocation by highlighting users and projects with "
         "consistently low GPU utilization (below 5%). The top chart (red) shows the users who have the most hours "
         "of GPU allocation with minimal actual usage, while the bottom chart (orange) shows projects with similar "
-        "patterns. This data can help identify opportunities for better resource allocation and training on GPU "
-        "optimization."
+        "patterns. "
     )
     
     ax3.text(0.5, 0.75, description, wrap=True, horizontalalignment='center', 
@@ -842,9 +839,7 @@ def create_no_usage_chart(pdf, year_data):
     text_box = fig.add_axes([0.1, 0.05, 0.8, 0.2])  # Positioning within 8.5x11 layout
     text_box.text(0.5, 0.5, 
         "This page highlights GPU hours consumed by jobs that were always under 5% utilization.\n"
-        "Bars are split by job execution type (Interactive vs. Batch).\n\n"
-        "Understanding this breakdown helps identify whether low-utilization jobs\n"
-        "are real-time workloads or batch jobs that might need optimization.",
+        "Bars are split by job execution type (Interactive vs. Batch).",
         fontsize=12, ha="center", va="center", wrap=True)
     text_box.set_xticks([])
     text_box.set_yticks([])

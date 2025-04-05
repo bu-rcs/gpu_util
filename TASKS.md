@@ -9,12 +9,12 @@ Ryan's notes todo:
 - x gpu hist numbers
 - x Utilization graph over only shared nodes
 - x sahares vs buyin last graph
-- quick stats undefined task id, truncate decimals
-- refine descriptions throughout, removing bboxes
+- x quick stats undefined task id, truncate decimals
+- x refine descriptions throughout, removing bboxes
 - CHECK old function on new month data, does new columns mess with logic?
 - can explore more into gpu util based on katia node file for understanding who gpu belongs to
 - output duplicates warning
-- FIGURE OUT jobid RECYCLE! Fillforward user/project?
+- FIGURE OUT jobid RECYCLE! Fillforward user/project? might fix issue and allow for join in jobid and user!
 - reproduce duplicate rows in accounting?
 - explore nans as below from last meeting questions
 - explore this issue: python reportgenerator.py -y 25 -m 03  
