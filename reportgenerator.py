@@ -966,6 +966,7 @@ def main():
         year_data = year_data[year_data['owner'] == args.user]
 
     print(f"Percent NaN from GPU Util: {float(year_data[year_data['scenario']!=0]['qname'].isna().mean()):.2%}")
+    print(f"Percent Duplicate from GPU Util: {float(year_data.duplicated().mean()):.2%}")
     
     # Load and map node status
     node_status = pd.read_csv('/projectnb/scv/utilization/katia/queue_info.csv')

@@ -1,3 +1,12 @@
+### 4/7/25 meeting
+- discuss done todo tasks below
+- discuss proper logic for merge filter
+- note any additional pages, graphs, need to see
+- note any final wording, visual changes - exactly which should have numbers, some too much?
+- discuss next steps with project
+- show how to put into module app
+- discuss rag project
+
 ### Post 3/31/25  
 Ryan's notes todo:  
 - x rename reserved
@@ -13,13 +22,18 @@ Ryan's notes todo:
 - x refine descriptions throughout, removing bboxes
 - CHECK old function on new month data, does new columns mess with logic?
 - can explore more into gpu util based on katia node file for understanding who gpu belongs to
-- output duplicates warning
-- FIGURE OUT jobid RECYCLE! Fillforward user/project? might fix issue and allow for join in jobid and user!
+- x output duplicates warning
+- x FIGURE OUT jobid RECYCLE! Fillforward user/project? might fix issue and allow for join in jobid and user! - removes a bunch of missings, but not all
+- x PANDAS MERGE WILL CREATE MULTIPLE ROWS, WE CAN THEN FILTER THESE BY SUBMISSION TIME AND END TIME AND GPU UTIL TIME TO KEEP ONLY GOOD ONES
 - reproduce duplicate rows in accounting?
 - explore nans as below from last meeting questions
 - explore this issue: python reportgenerator.py -y 25 -m 03  
 Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-e02/2503  
 Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-306/2503  
+- explore this issue: python reportgenerator.py -y 24 -m 12
+File "/projectnb/rcs-intern/ryanjg/gpu_util/reportgenerator.py", line 996, in main
+    create_n_gpu_chart(pdf, year_data)
+pandas.errors.IntCastingNaNError: Cannot convert non-finite values (NA or inf) to integer
 - function to save merged dataset from date to date
 - plan rag project
 

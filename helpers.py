@@ -276,6 +276,8 @@ def process_gpu_data(year: str, month: str) -> pd.DataFrame:
     gpu_jobs["job_task"] = (
         gpu_jobs["job_number"].astype(str) + "." + gpu_jobs["task_string"].astype(str)
     )
+    gpu_jobs["ux_submission_time"] = pd.to_numeric(gpu_jobs["ux_submission_time"], errors="coerce")
+    gpu_jobs["ux_end_time"] = pd.to_numeric(gpu_jobs["ux_end_time"], errors="coerce")
 
     # Get file paths for the specified month
     nodes = os.listdir("/project/scv/dugan/gpustats/data/")
@@ -295,13 +297,31 @@ def process_gpu_data(year: str, month: str) -> pd.DataFrame:
             continue
 
         gpu_records["node"] = node
+        gpu_records["time"] = pd.to_numeric(gpu_records["time"], errors="coerce")
 
         # gpu_records_scenario = gpu_records[gpu_records['scenario'] != 0]
         # merged_df = pd.merge(gpu_records_scenario, gpu_jobs, left_on='job_id', right_on='job_task', how='left')
         merged_df = pd.merge(
-            gpu_records, gpu_jobs, left_on="job_id", right_on="job_task", how="left"
+            gpu_records, gpu_jobs,
+            left_on="job_id", right_on="job_task",
+            how="left"
         )
-        all_merged_dfs.append(merged_df)
+
+        # Filter rows where GPU timestamp falls within the job's actual time window
+        # Create a mask for matching time within job range
+        in_time_range = (
+            (merged_df["time"] >= merged_df["ux_submission_time"]) &
+            (merged_df["time"] <= merged_df["ux_end_time"])
+        )
+
+        # Fill NaNs with False for the mask
+        in_time_range = in_time_range.fillna(False)
+
+        # Combine with scenario == 0
+        matched = merged_df[in_time_range | (merged_df["scenario"] == 0)]
+
+        all_merged_dfs.append(matched)
+        # all_merged_dfs.append(merged_df)
 
     # Return the final concatenated DataFrame
     return (
