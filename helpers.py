@@ -276,6 +276,8 @@ def process_gpu_data(year: str, month: str) -> pd.DataFrame:
     gpu_jobs["job_task"] = (
         gpu_jobs["job_number"].astype(str) + "." + gpu_jobs["task_string"].astype(str)
     )
+    gpu_jobs["ux_submission_time"] = pd.to_numeric(gpu_jobs["ux_submission_time"], errors="coerce")
+    gpu_jobs["ux_end_time"] = pd.to_numeric(gpu_jobs["ux_end_time"], errors="coerce")
 
     # Get file paths for the specified month
     nodes = os.listdir("/project/scv/dugan/gpustats/data/")
@@ -295,13 +297,31 @@ def process_gpu_data(year: str, month: str) -> pd.DataFrame:
             continue
 
         gpu_records["node"] = node
+        gpu_records["time"] = pd.to_numeric(gpu_records["time"], errors="coerce")
 
         # gpu_records_scenario = gpu_records[gpu_records['scenario'] != 0]
         # merged_df = pd.merge(gpu_records_scenario, gpu_jobs, left_on='job_id', right_on='job_task', how='left')
         merged_df = pd.merge(
-            gpu_records, gpu_jobs, left_on="job_id", right_on="job_task", how="left"
+            gpu_records, gpu_jobs,
+            left_on="job_id", right_on="job_task",
+            how="left"
         )
-        all_merged_dfs.append(merged_df)
+
+        # Filter rows where GPU timestamp falls within the job's actual time window
+        # Create a mask for matching time within job range
+        in_time_range = (
+            (merged_df["time"] >= merged_df["ux_submission_time"]) &
+            (merged_df["time"] <= merged_df["ux_end_time"])
+        )
+
+        # Fill NaNs with False for the mask
+        in_time_range = in_time_range.fillna(False)
+
+        # Combine with scenario == 0
+        matched = merged_df[in_time_range | (merged_df["scenario"] == 0)]
+
+        all_merged_dfs.append(matched)
+        # all_merged_dfs.append(merged_df)
 
     # Return the final concatenated DataFrame
     return (
@@ -420,3 +440,52 @@ def process_gpu_data_range(start_date: str, end_date: str) -> pd.DataFrame:
 
     # Concatenate results
     return pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame()
+
+
+def get_cluster_node_info() -> pd.DataFrame:
+    """
+    Fetch and parse the cluster node data from the master node configuration.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing details about each cluster node with the following columns:
+            - host
+            - processor_type
+            - sockets
+            - cores
+            - memory
+            - disk
+            - scratch
+            - eth_speed
+            - ib_speed
+            - gpu_type
+            - gpus
+            - flag
+            - extra_batch (optional, may be empty)
+    """
+    command_nodes = "cat /usr/local/sge/scv/nodes/master"
+    
+    # Execute shell command
+    result_nodes = subprocess.run(command_nodes, shell=True, capture_output=True, text=True)
+    
+    # Split output into lines
+    lines = result_nodes.stdout.splitlines()
+    data = []
+
+    for line in lines:
+        if line.strip().startswith("#") or not line.strip():
+            continue  # Skip comments and empty lines
+        
+        parts = line.split()
+        if len(parts) >= 11:
+            if len(parts) == 12:
+                parts.append("")  # Ensure 13 fields by adding placeholder for missing extra_batch
+            data.append(parts)
+    
+    # Define column names
+    columns = [
+        "host", "processor_type", "sockets", "cores", "memory", "disk", "scratch",
+        "eth_speed", "ib_speed", "gpu_type", "gpus", "flag", "extra_batch"
+    ]
+
+    # Return as DataFrame
+    return pd.DataFrame(data, columns=columns)

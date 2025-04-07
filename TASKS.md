@@ -1,3 +1,42 @@
+### 4/7/25 meeting
+- discuss done todo tasks below
+- discuss proper logic for merge filter
+- note any additional pages, graphs, need to see
+- note any final wording, visual changes - exactly which should have numbers, some too much?
+- discuss next steps with project
+- show how to put into module app
+- discuss rag project
+
+### Post 3/31/25  
+Ryan's notes todo:  
+- x rename reserved
+- x rename second chart to gpu hours 
+- x top users/projects for shared/buyin
+- x repeat low 5% for shared
+- x add numbers on top of bars (done for n gpu, is it really needed for others?)
+- x proportions for squashed chart doesnt look great
+- x gpu hist numbers
+- x Utilization graph over only shared nodes
+- x sahares vs buyin last graph
+- x quick stats undefined task id, truncate decimals
+- x refine descriptions throughout, removing bboxes
+- CHECK old function on new month data, does new columns mess with logic?
+- can explore more into gpu util based on katia node file for understanding who gpu belongs to
+- x output duplicates warning
+- x FIGURE OUT jobid RECYCLE! Fillforward user/project? might fix issue and allow for join in jobid and user! - removes a bunch of missings, but not all
+- x PANDAS MERGE WILL CREATE MULTIPLE ROWS, WE CAN THEN FILTER THESE BY SUBMISSION TIME AND END TIME AND GPU UTIL TIME TO KEEP ONLY GOOD ONES
+- reproduce duplicate rows in accounting?
+- explore nans as below from last meeting questions
+- explore this issue: python reportgenerator.py -y 25 -m 03  
+Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-e02/2503  
+Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-306/2503  
+- explore this issue: python reportgenerator.py -y 24 -m 12
+File "/projectnb/rcs-intern/ryanjg/gpu_util/reportgenerator.py", line 996, in main
+    create_n_gpu_chart(pdf, year_data)
+pandas.errors.IntCastingNaNError: Cannot convert non-finite values (NA or inf) to integer
+- function to save merged dataset from date to date
+- plan rag project
+
 ### Post 3/18/25
 1. grep ,4086404 /projectnb/rcsmetrics/accounting/data/scc/2024.csv -> scc-ye2 has no gpu, but recorded  
 2. added node name. did not add username to merge since it can be missing for many values. alternative?  
@@ -8,9 +47,9 @@
 7. can generate report for specific year month, project (optional), user (optional), "Quick Stats" page generated if specified
 
 Questions:  
-- How to tell if a gpu belongs to shared vs buyin? When idle no qname
-- Jobname recycle, how to tell what user since missing for many?
-- Duplicate values? whats going on? 2024-01-21 22:58:02 weird merging time event?
+- How to tell if a gpu belongs to shared vs buyin? When idle no qname: Katia node file
+- Jobname recycle, how to tell what user since missing for many?: find jobids that are less, these are recycled, these are sep dates. fill in user/owner by looking at same month node file to find it, correction algorithm only on recycled job ids
+- Duplicate values? whats going on? 2024-01-21 22:58:02 weird merging time event? - get code to reproduce
 - some nans when grouping over entire 2024 year...exploring this 153847 vs 137830: 505 jobs?, 3 users
    - year_2024_01[year_2024_01['owner']=='allenjb']['options'].values
    - causes some issues with generating report for whole year  
