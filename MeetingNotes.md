@@ -1,6 +1,30 @@
 
 # Meeting notes
 
+*2025-04-07*
+Present: Josh, Katia & Ryan
+
+Ryan has enhanced his report and added reports for the "shared" resources only. Below is Ryan's todo list:  
+1. Report by queue;
+2. Page 8: Add values for each bar, i.e. 56 (32%)
+3. Page 9: Add only percentages for the top portion of each bar( you can place them to the middle right). Use only one digit after a period.
+4. Page 10: see if you can add a table to the upper-right corner to specify number of jobs for each count of GPUs.
+5. The last 2 pages and page 8: To split on buy-in  vs shared resources, use the column that is "shared" for "*-pub* queues.
+6. For all graphs starting from page 5 use "class-user" from Katia's file to diff. between shared vs. buy-in
+7. Fix README file to list the right python script name.
+
+Katia's to-do list:  
+1. Katia (to think): For overall utilization (for 2 pages of report) where to get buy-in vs. shared information for historical data
+2. Katia: ask Mike to add Ryan to the install-group, so the script could be installed as a command-line tool
+3. Develop a list of visualizations suitable for each case: GPU over all utilization, project GPU utilization, user GPU utilization, queue GPU utilization
+4. What metrics we need to report for memory utilization?
+
+
+Josh's to-do list:  
+1. Check if Ryan's script generates a similar output (for merging datasets) to the one Josh creates in Matlab
+2. Check if the script needs any optimization
+3. qgpuacct (think if there is any better name for this command): what components should it include?
+4. qgpureport (maybe there is a better name for it); Check ACCESS and see how they report various things in XDMOD. This report would potentially create a pdf report with GPU memory and GPU utilization graphs and maybe something else.
 
 *2025-03-17*   
 Present: Katia & Ryan  
