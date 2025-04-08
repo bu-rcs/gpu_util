@@ -1,0 +1,10 @@
+#!/bin/bash -l
+
+#$ -P rcsmetrics
+#$ -o /projectnb/rcsmetrics/gpu_util/logs/
+#$ -e /projectnb/rcsmetrics/gpu_util/logs/
+
+module load matlab/2023a
+
+cd /projectnb/rcsmetrics/gpu_util/
+matlab -nodesktop -nodisplay -batch combine_stats

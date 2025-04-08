@@ -1,0 +1,2 @@
+10/23/24: v2 copied to /projectnb/rcsmetrics/gpu_util/
+    v2 is an upgrade from v1 which was intended to be run manually
