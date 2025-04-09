@@ -24,11 +24,13 @@ def parse_arguments():
                         help='Filter by project name (optional)')
     parser.add_argument('-u', '--user', type=str, default=None, 
                         help='Filter by user name (optional)')
+    parser.add_argument('-q', '--qname', type=str, default=None, 
+                        help='Filter by queue name (optional)')
 
     return parser.parse_args()
 
 
-def create_title_page(pdf, year_month_date, project=None, user=None):
+def create_title_page(pdf, year_month_date, project=None, user=None, qname=None):
     """Create and save the title page"""
     month_name = year_month_date.strftime("%B")
     year_val = year_month_date.strftime("%Y")
@@ -50,6 +52,7 @@ def create_title_page(pdf, year_month_date, project=None, user=None):
 
     project_text = f"For project: {project}\n" if project else ""
     user_text = f"For user: {user}\n" if user else ""
+    q_text = f"For queue: {qname}\n" if qname else ""
 
     info_text = (
         f"This report provides an analysis of GPU usage patterns\n"
@@ -57,7 +60,10 @@ def create_title_page(pdf, year_month_date, project=None, user=None):
         f"The dataset covers all GPU jobs run during {month_name} {year_val}.\n"
         f"{project_text}"
         f"{user_text}"
-        f"The analysis includes job counts and GPU-hours consumed."
+        f"{q_text}"
+        f"The analysis includes job counts and GPU-hours consumed.\n"
+        f"Please note that due to certain data discrepancies, some \n"
+        f"figures may not be perfect."
     )
 
     fig.text(0.5, 0.4, info_text, 
@@ -106,7 +112,7 @@ def create_quick_stats_chart(pdf, year_data):
     top_low_util_jobs = low_util_jobs[['owner', 'job_id', 'util_mean', 'project', 'job_interactive', 'gpu_hours']].head(5)
 
     title = "Quick Stats"
-    subtitle = "This page was generated as user/project was specified"
+    subtitle = "This page was generated as user/project/queue was specified"
 
     fig = plt.figure(figsize=(8.5, 11))
     gs = gridspec.GridSpec(2, 1, height_ratios=[1, 2])
@@ -413,11 +419,11 @@ def create_usage_breakdown_charts(pdf, year_data):
         "util": "mean",  # Mean of util
         "reserved": "sum",  # Sum of reserved GPU (to compute GPU hours)
         "project_y": "first",  # Keep project name
-        "class_own": "first",  # Shared or Buy-in
+        "class_user": "first",  # Shared or Buy-in
     }).reset_index()
 
     # Convert class ownership to readable categories
-    job_utilization["class_type"] = job_utilization["class_own"].apply(lambda x: "Shared" if x == "shared" else "Buy-in")
+    job_utilization["class_type"] = job_utilization["class_user"].apply(lambda x: "Shared" if x == "shared" else "Buy-in")
 
     # Convert reserved GPUs into GPU hours
     job_utilization["gpu_hours"] = job_utilization["reserved"] / 12
@@ -542,7 +548,7 @@ def create_low_utilization_chart_by_class(pdf, year_data):
     """Create low utilization chart split by shared vs buy-in"""
     # Filter data for low utilization
     low_util_data = year_data[(year_data['util'] <= 5) & (year_data['scenario'] != 0)]
-    low_util_data['class_type'] = low_util_data['class_own'].apply(lambda x: "Shared" if x == "shared" else "Buy-in")
+    low_util_data['class_type'] = low_util_data['class_user'].apply(lambda x: "Shared" if x == "shared" else "Buy-in")
 
     # Group by owner and class type
     zero_util_users = low_util_data.groupby(['owner', 'class_type']).size().reset_index(name='zero_util_count')
@@ -609,7 +615,7 @@ def create_job_type_chart(pdf, year_data):
     """Create job type chart"""
     df = year_data.copy()
     
-    df["job_type"] = df["class_own"].str.capitalize()
+    df["job_type"] = df["class_user"].str.capitalize()
     df["execution_type"] = df["job_interactive"].apply(lambda x: "On-Demand/Interactive" if x else "Batch")
     df["gpu_hours"] = df["reserved"] / 12
     
@@ -628,30 +634,43 @@ def create_job_type_chart(pdf, year_data):
     fig = plt.figure(figsize=(8.5, 11))
     gs = gridspec.GridSpec(3, 2, height_ratios=[2, 2, 1])
     
+    # Plot 1: Job Count by Job Type
     ax1 = fig.add_subplot(gs[0, 0])
     sns.barplot(x=job_count_by_type.index, y=job_count_by_type.values, ax=ax1, palette="coolwarm")
     ax1.set_title("Job Count: Shared vs Buyin", fontsize=12)
     ax1.set_ylabel("Count", fontsize=10)
     ax1.set_xlabel("Job Type", fontsize=10)
-    
+    for i, v in enumerate(job_count_by_type.values):
+        ax1.text(i, v + 0.5, f"{v}", ha='center', fontsize=9)
+
+    # Plot 2: Job Count by Execution Type
     ax2 = fig.add_subplot(gs[0, 1])
     sns.barplot(x=job_count_by_execution.index, y=job_count_by_execution.values, ax=ax2, palette="coolwarm")
     ax2.set_title("Job Count: On-Demand/Interactive vs Batch", fontsize=12)
     ax2.set_ylabel("Count", fontsize=10)
     ax2.set_xlabel("Execution Type", fontsize=10)
-    
+    for i, v in enumerate(job_count_by_execution.values):
+        ax2.text(i, v + 0.5, f"{v}", ha='center', fontsize=9)
+
+    # Plot 3: GPU Hours by Job Type
     ax3 = fig.add_subplot(gs[1, 0])
     sns.barplot(x=gpu_hours_by_type.index, y=gpu_hours_by_type.values, ax=ax3, palette="magma")
     ax3.set_title("GPU Hours: Shared vs Buyin", fontsize=12)
     ax3.set_ylabel("GPU Hours", fontsize=10)
     ax3.set_xlabel("Job Type", fontsize=10)
-    
+    for i, v in enumerate(gpu_hours_by_type.values):
+        ax3.text(i, v + 0.5, f"{v:.1f}", ha='center', fontsize=9)
+
+    # Plot 4: GPU Hours by Execution Type
     ax4 = fig.add_subplot(gs[1, 1])
     sns.barplot(x=gpu_hours_by_execution.index, y=gpu_hours_by_execution.values, ax=ax4, palette="magma")
     ax4.set_title("GPU Hours: On-Demand/Interactive vs Batch", fontsize=12)
     ax4.set_ylabel("GPU Hours", fontsize=10)
     ax4.set_xlabel("Execution Type", fontsize=10)
-    
+    for i, v in enumerate(gpu_hours_by_execution.values):
+        ax4.text(i, v + 0.5, f"{v:.1f}", ha='center', fontsize=9)
+
+    # Description Text Section
     ax5 = fig.add_subplot(gs[2, :])
     ax5.axis("off")
     
@@ -674,10 +693,10 @@ def create_job_type_chart(pdf, year_data):
 
 
 def create_stacked_job_chart(pdf, year_data):
-    """Create stacked job chart"""
+    """Create stacked job chart with percentage proportions"""
     df = year_data.copy()
     
-    df["job_type"] = df["class_own"].str.capitalize()
+    df["job_type"] = df["class_user"].str.capitalize()
     df["execution_type"] = df["job_interactive"].apply(lambda x: "On-Demand/Interactive" if x else "Batch")
     df["gpu_hours"] = df["reserved"] / 12
     
@@ -690,41 +709,50 @@ def create_stacked_job_chart(pdf, year_data):
     job_count_stacked = grouped_df.groupby(["job_type", "execution_type"]).size().unstack(fill_value=0)
     gpu_hours_stacked = grouped_df.groupby(["job_type", "execution_type"])["gpu_hours"].sum().unstack(fill_value=0)
     
+    # Convert job counts to percentages
+    job_count_stacked_percent = job_count_stacked.div(job_count_stacked.sum(axis=1), axis=0) * 100
+    gpu_hours_stacked_percent = gpu_hours_stacked.div(gpu_hours_stacked.sum(axis=1), axis=0) * 100
+    
     fig = plt.figure(figsize=(8.5, 11))
     gs = gridspec.GridSpec(3, 2, height_ratios=[2, 2, 1], hspace=0.4)
     
+    # Plot Job Count as percentages
     ax1 = fig.add_subplot(gs[0, 0:])
-    job_count_stacked.plot(kind="bar", stacked=True, ax=ax1, colormap="coolwarm")
-    ax1.set_title("Job Count by Job Type & Execution Type", fontsize=12)
-    ax1.set_ylabel("Count", fontsize=10)
+    job_count_stacked_percent.plot(kind="bar", stacked=True, ax=ax1, colormap="coolwarm")
+    ax1.set_title("Job Count by Job Type & Execution Type (Percentage)", fontsize=12)
+    ax1.set_ylabel("Percentage (%)", fontsize=10)
     ax1.set_xlabel("Job Type", fontsize=10)
     ax1.legend(title="Execution Type")
     ax1.grid(axis='y', linestyle="--", alpha=0.7)
     
+    # Add percentage labels to the bars
     for container in ax1.containers:
-        ax1.bar_label(container, labels=[f"{int(val):,}" if val > 0 else "" for val in container.datavalues], 
-                      padding=3, fontsize=9, color='black')
+        labels = [f"{val:.1f}%" if val > 0 else "" for val in container.datavalues]
+        ax1.bar_label(container, labels=labels, padding=3, fontsize=9, color='black')
     
+    # Plot GPU Hours as percentages
     ax2 = fig.add_subplot(gs[1, 0:])
-    gpu_hours_stacked.plot(kind="bar", stacked=True, ax=ax2, colormap="magma")
-    ax2.set_title("GPU Hours by Job Type & Execution Type", fontsize=12)
-    ax2.set_ylabel("GPU Hours", fontsize=10)
+    gpu_hours_stacked_percent.plot(kind="bar", stacked=True, ax=ax2, colormap="magma")
+    ax2.set_title("GPU Hours by Job Type & Execution Type (Percentage)", fontsize=12)
+    ax2.set_ylabel("Percentage (%)", fontsize=10)
     ax2.set_xlabel("Job Type", fontsize=10)
     ax2.legend(title="Execution Type")
     ax2.grid(axis='y', linestyle="--", alpha=0.7)
     
+    # Add percentage labels to the bars
     for container in ax2.containers:
-        ax2.bar_label(container, labels=[f"{val:,.0f}" if val > 0 else "" for val in container.datavalues], 
-                      padding=3, fontsize=9, color='black')
+        labels = [f"{val:.1f}%" if val > 0 else "" for val in container.datavalues]
+        ax2.bar_label(container, labels=labels, padding=3, fontsize=9, color='black')
     
+    # Description Text Section
     ax3 = fig.add_subplot(gs[2, :])
     ax3.axis("off")
     
     description = (
         "This analysis compares GPU usage patterns across job types and execution modes. "
         "The top chart shows the total number of jobs by Job Type (Shared vs Buyin) broken down by "
-        "Execution Type (On-Demand/Interactive vs Batch). The middle chart displays the corresponding "
-        "GPU hours consumed by each category combination. "
+        "Execution Type (On-Demand/Interactive vs Batch) as a percentage. The middle chart displays the corresponding "
+        "GPU hours consumed by each category combination as a percentage. "
     )
     
     ax3.text(0.5, 0.5, description, wrap=True, horizontalalignment='center', 
@@ -740,43 +768,61 @@ def create_stacked_job_chart(pdf, year_data):
 
 
 def create_n_gpu_chart(pdf, year_data):
-    """Create number of gpus per job histogram chart"""
+    """Create table summarizing the distribution of GPUs per job"""
     df = year_data.copy()
+    
+    # Group data by owner and job_id and get the first n_gpu value for each job
     grouped_df = df.groupby(["owner", "job_id"]).agg({
         "n_gpu": "first",
     }).reset_index()
+    
+    # Calculate the distribution of GPUs per job
+    gpu_distribution = grouped_df["n_gpu"].dropna().value_counts().sort_index()
+    gpu_distribution_percentage = (gpu_distribution / gpu_distribution.sum()) * 100
 
+    # Create a DataFrame to display in the table
+    table_data = pd.DataFrame({
+        "Number of GPUs": gpu_distribution.index,
+        "Frequency": gpu_distribution.values,
+        "Percentage (%)": gpu_distribution_percentage.values.round(2)
+    })
+    
     fig = plt.figure(figsize=(8.5, 11))
-
     gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1], figure=fig)
 
     ax = fig.add_subplot(gs[0])
-    hist = sns.histplot(grouped_df['n_gpu'].astype(int), bins=range(1, grouped_df['n_gpu'].astype(int).max() + 1), kde=False, ax=ax, color="purple")
-    ax.set_title("Distribution of GPUs per Job", fontsize=14)
-    ax.set_xlabel("Number of GPUs per Job", fontsize=12)
-    ax.set_ylabel("Frequency", fontsize=12)
-    ax.grid(axis='y', linestyle='--', alpha=0.7)
+    ax.axis("off")  # Hide axes for the table
 
-    # Add numbers on top of the bars
-    for p in hist.patches:
-        height = p.get_height()
-        ax.annotate(f'{int(height)}', (p.get_x() + p.get_width() / 2., height),
-                    ha='center', va='center', xytext=(0, 5), textcoords='offset points', fontsize=10, color='black')
+    # Create the table
+    table = ax.table(
+        cellText=table_data.values,
+        colLabels=table_data.columns,
+        cellLoc="center",
+        loc="center"
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.auto_set_column_width(col=list(range(len(table_data.columns))))
+
+    # Add title to the table
+    ax.set_title("Distribution of GPUs Per Job", fontsize=14, pad=20)
 
     ax_text = fig.add_subplot(gs[1])
     ax_text.axis("off")  # Hide axis
 
+    # Add a description below the table
     description = (
-        "This histogram shows the distribution of GPUs requested per job. Each bar represents the "
-        "frequency of jobs that requested a specific number of GPUs."
+        "This table summarizes the distribution of GPUs requested per job. Each row shows the number of GPUs "
+        "requested, the frequency of jobs that requested that number of GPUs, and the percentage of total jobs."
     )
 
-    ax_text.text(0.5, 0.4, description, fontsize=11, ha='center', va='center', 
-                wrap=True, transform=ax_text.transAxes)
+    ax_text.text(0.5, 0.4, description, fontsize=11, ha='center', va='center',
+                 wrap=True, transform=ax_text.transAxes)
 
     footer = "For internal use — Research Computing Services Team"
     fig.text(0.5, 0.03, footer, fontsize=8, ha='center', va='center', style='italic')
     pdf.savefig(fig)
+    plt.close(fig)
 
 
 def create_no_usage_chart(pdf, year_data):
@@ -861,7 +907,7 @@ def create_no_usage_chart_by_class(pdf, year_data):
         "util": lambda x: (x < 5).all(),  # True if all time points were <5%
         "reserved": "sum",  # Sum of reserved GPU (to compute GPU hours)
         "project_y": "first",  # Keep project name
-        "class_own": "first",  # Shared or Buy-in
+        "class_user": "first",  # Shared or Buy-in
         "job_interactive": "first"  # Execution type
     }).reset_index()
 
@@ -869,7 +915,7 @@ def create_no_usage_chart_by_class(pdf, year_data):
     low_util_jobs = job_utilization[job_utilization["util"]]
 
     # Convert class ownership to readable categories
-    low_util_jobs["class_type"] = low_util_jobs["class_own"].apply(lambda x: "Shared" if x == "shared" else "Buy-in")
+    low_util_jobs["class_type"] = low_util_jobs["class_user"].apply(lambda x: "Shared" if x == "shared" else "Buy-in")
 
     # Convert reserved GPUs into GPU hours
     low_util_jobs["gpu_hours"] = low_util_jobs["reserved"] / 12
@@ -946,7 +992,7 @@ def main():
     year_month_date = datetime.strptime("20" + year + '-' + month, "%Y-%m")
     
     # Create title page
-    create_title_page(pdf, year_month_date, args.project, args.user)
+    create_title_page(pdf, year_month_date, args.project, args.user, args.qname)
     
     # Process GPU data
     year_data = process_gpu_data(year, month)
@@ -965,13 +1011,17 @@ def main():
     if args.user:
         year_data = year_data[year_data['owner'] == args.user]
 
+    # qname
+    if args.qname:
+        year_data = year_data[year_data['qname'] == args.qname]
+
     print(f"Percent NaN from GPU Util: {float(year_data[year_data['scenario']!=0]['qname'].isna().mean()):.2%}")
     print(f"Percent Duplicate from GPU Util: {float(year_data.duplicated().mean()):.2%}")
     
     # Load and map node status
     node_status = pd.read_csv('/projectnb/scv/utilization/katia/queue_info.csv')
-    node_status_mapping = node_status.set_index('queuename')['class_own'].to_dict()
-    year_data['class_own'] = year_data['qname'].map(node_status_mapping)
+    node_status_mapping = node_status.set_index('queuename')['class_user'].to_dict()
+    year_data['class_user'] = year_data['qname'].map(node_status_mapping)
     node_status_mapping = node_status.set_index('queuename')['class_user'].to_dict()
     year_data['class_user'] = year_data['qname'].map(node_status_mapping)
     
@@ -982,12 +1032,12 @@ def main():
     year_data['time'] = pd.to_datetime(year_data['time'], unit='s')
     
     # Create charts
-    if args.user or args.project:
+    if args.user or args.project or args.qname:
         create_quick_stats_chart(pdf, year_data)
     create_utilization_chart(pdf, year_data)
     plot_shared_gpu_utilization(pdf, year_data)
     create_top_users_chart(pdf, year_data)
-    if not (args.user or args.project):
+    if not (args.user or args.project or args.qname):
         create_usage_breakdown_charts(pdf, year_data)
     create_low_utilization_chart(pdf, year_data)
     create_low_utilization_chart_by_class(pdf, year_data)
