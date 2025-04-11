@@ -1,11 +1,31 @@
-### 4/7/25 meeting
-- discuss done todo tasks below
-- discuss proper logic for merge filter
-- note any additional pages, graphs, need to see
-- note any final wording, visual changes - exactly which should have numbers, some too much?
-- discuss next steps with project
-- show how to put into module app
-- discuss rag project
+### Post 4/7/25 meeting
+1. x Report by queue - added to report gen
+2. x Page 8: Add values for each bar, i.e. 56 (32%)
+3. x Page 9: Add only percentages for the top portion of each bar( you can place them to the middle right). Use only one digit after a period.
+4. x Page 10: see if you can add a table to the upper-right corner to specify number of jobs for each count of GPUs.
+5. (SWITCHED ALL TO class_user) The last 2 pages and page 8: To split on buy-in  vs shared resources, use the column that is "shared" for "*-pub* queues.
+6. -
+7. x For all graphs starting from page 5 use "class-user" from Katia's file to diff. between shared vs. buy-in
+8. x Fix README file to list the right python script name.
+
+- integrate new gpu util file parser, test & compare to prev
+   - working for old files -> generates same output for default vals
+SOME OUTPUTS:
+=========
+python reportgenerator.py -y=25 -m=04
+Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-e04/2504
+Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-e02/2504
+
+broken line!!!:
+1743424803 Unable to determine the device handle for GPU3: 0000:3D:00.0: Unknown Error   0.0   0.0 -        - 3322342.undefined
+=========
+
+python reportgenerator.py -y 25 -m 03
+Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-e04/2503
+Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-e02/2503
+Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-306/2503  <----- WHY IS THIS BROKEN???
+
+
 
 ### Post 3/31/25  
 Ryan's notes todo:  
@@ -20,22 +40,16 @@ Ryan's notes todo:
 - x sahares vs buyin last graph
 - x quick stats undefined task id, truncate decimals
 - x refine descriptions throughout, removing bboxes
-- CHECK old function on new month data, does new columns mess with logic?
-- can explore more into gpu util based on katia node file for understanding who gpu belongs to
 - x output duplicates warning
 - x FIGURE OUT jobid RECYCLE! Fillforward user/project? might fix issue and allow for join in jobid and user! - removes a bunch of missings, but not all
 - x PANDAS MERGE WILL CREATE MULTIPLE ROWS, WE CAN THEN FILTER THESE BY SUBMISSION TIME AND END TIME AND GPU UTIL TIME TO KEEP ONLY GOOD ONES
-- reproduce duplicate rows in accounting?
-- explore nans as below from last meeting questions
-- explore this issue: python reportgenerator.py -y 25 -m 03  
-Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-e02/2503  
-Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-306/2503  
-- explore this issue: python reportgenerator.py -y 24 -m 12
-File "/projectnb/rcs-intern/ryanjg/gpu_util/reportgenerator.py", line 996, in main
-    create_n_gpu_chart(pdf, year_data)
-pandas.errors.IntCastingNaNError: Cannot convert non-finite values (NA or inf) to integer
-- function to save merged dataset from date to date
-- plan rag project
+- x explore this issue: python reportgenerator.py -y 24 -m 12 pandas.errors.IntCastingNaNError: Cannot convert non-finite values (NA or inf)
+- x function to save merged dataset from date to date -> NOTE already done basically with process_gpu_data_range
+- x CHECK old function on new month data, does new columns mess with logic? YES, IT DOES, NEED TO GET NEW FUNCTION BUILT IN!!!
+- x explore this issue: python reportgenerator.py -y 25 -m 03  
+         Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-e02/2503  
+         Skipping missing or corrupted file: /project/scv/dugan/gpustats/data/scc-306/2503  
+
 
 ### Post 3/18/25
 1. grep ,4086404 /projectnb/rcsmetrics/accounting/data/scc/2024.csv -> scc-ye2 has no gpu, but recorded  

@@ -18,7 +18,7 @@ pip install pandas matplotlib seaborn
 To generate a GPU utilization report, run the script with the following command:
 
 ```sh
-python gpu_utilization_report.py [OPTIONS]
+python reportgenerator.py [OPTIONS]
 ```
 
 ### Options
@@ -34,19 +34,19 @@ python gpu_utilization_report.py [OPTIONS]
 Generate a report for February 2025 and save it as `gpu_report_february.pdf`:
 
 ```sh
-python gpu_utilization_report.py -y 25 -m 02 -o gpu_report_february.pdf
+python reportgenerator.py -y 25 -m 02 -o gpu_report_february.pdf
 ```
 
 Generate a report for January 2025, filtering by project name `project_xyz`:
 
 ```sh
-python gpu_utilization_report.py -y 25 -m 01 -p project_xyz
+python reportgenerator.py -y 25 -m 01 -p project_xyz
 ```
 
 Generate a report for March 2025, filtering by user name `john_doe`:
 
 ```sh
-python gpu_utilization_report.py -y 25 -m 03 -u john_doe
+python reportgenerator.py -y 25 -m 03 -u john_doe
 ```
 
 ## Description
