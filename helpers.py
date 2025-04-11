@@ -187,6 +187,8 @@ def clean_gpu_data_new(filepath: str) -> pd.DataFrame:
         "scenario", "memory_total_mb", "memory_used_mb", "temperature", "power_draw"
     ]
 
+    error_row_count = 0
+
     with open(filepath, "r", encoding="utf-8") as file:
         for line in file:
             parts = line.split()
@@ -226,21 +228,31 @@ def clean_gpu_data_new(filepath: str) -> pd.DataFrame:
                     memory_values["power_draw"] = parts[10]
 
             # Append cleaned record
-            data.append([
-                int(time),
-                bus,
-                float(util),
-                float(mem_throughput),
-                user,
-                proj,
-                job_id,
-                scenario,
-                memory_values["memory_total"],
-                memory_values["memory_used"],
-                memory_values["temperature"],
-                memory_values["power_draw"]
-            ])
+            try:
+                data.append([
+                    int(time),
+                    bus,
+                    float(util),
+                    float(mem_throughput),
+                    user,
+                    proj,
+                    job_id,
+                    scenario,
+                    memory_values["memory_total"],
+                    memory_values["memory_used"],
+                    memory_values["temperature"],
+                    memory_values["power_draw"]
+                ])
+            except ValueError:
+                # likely a glitch with the gpu util file!
+                # for example:
+                # ...Unable to determine the device handle for GPU1...
+                # ...NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver...
+                error_row_count += 1
 
+    if error_row_count:
+        print(f"There are some issues with file {filepath}! Total rows with issues: {error_row_count}")
+        
     return pd.DataFrame(data, columns=columns)
 
 
@@ -291,7 +303,8 @@ def process_gpu_data(year: str, month: str) -> pd.DataFrame:
     all_merged_dfs = []
     for node, file_name in files:
         try:
-            gpu_records = pd.DataFrame(clean_gpu_data(file_name))
+            # gpu_records = pd.DataFrame(clean_gpu_data(file_name))
+            gpu_records = pd.DataFrame(clean_gpu_data_new(file_name))
         except Exception as e:
             print(f"Skipping missing or corrupted file: {file_name}")
             continue
