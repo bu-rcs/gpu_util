@@ -2,7 +2,7 @@ import argparse
 
 def parse_arguments():
     """Parse command line arguments for report specs"""
-    parser = argparse.ArgumentParser(description='Generate GPU utilization report')
+    parser = argparse.ArgumentParser(prog='gpu_report', description='Generate GPU utilization report')
     parser.add_argument('year', type=str, 
                         help='Year (last two digits, e.g. 25)')
     parser.add_argument('month', type=str,  
