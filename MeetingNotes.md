@@ -1,5 +1,20 @@
 
 # Meeting notes
+## *2025-06-02*
+Present: Josh
+
+Worked on `qgpu_report`:
+1. Looked at XDMOD plots, using "https://xdmod.access-ci.org/" as an example
+2. Re-use Ryan's existing plot approach and just modify it (more simple than an interactive webpage like XDMOD)
+* per gpu/job graphs
+* mem usage
+* GPU utilization
+* time-series graphs?
+3. SCC is down for maintenance, but got `reportgenerator.py` running locally to dig more into data table/plot generation.
+4. Report generated when requested, or automatically? Is running time important? Running full `reportgenerator.py` is not "instant", so if it needs to be faster a more direct approach may be needed.
+5. Could re-use qacct_gpu approach and pull per-job data vs getting all data and filtering.
+6. Might be worth profiling `reportgenerator.py` to see if speed-up possible?
+
 ## *2025-05-19*
 Present: Josh
 
