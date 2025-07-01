@@ -1,0 +1,12 @@
+https://github.com/wesm/feather
+
+https://sift-tool.org/
+
+https://github.com/bu-rcs/SCC-Job-Troubleshooting/wiki/Accounting-File
+
+acct.pl
+grep vs qacct same speed
+
+
+bash options
+https://stackoverflow.com/a/33826763
