@@ -1,5 +1,31 @@
 
 # Meeting notes
+## *2025-06-30*
+Present: Josh
+
+Worked on `qacct_gpu`:
+1. Considered how best to "pass" typical `qacct` syntax to `qacct_gpu` to allow summary generation
+2. Logic for detecting output type (summary/vs job level)
+3. Worked on what aggregate stats to report in summary and how best to compute them
+4. Measured `scp` time relative to single `qacct` query, should be OK in most circumstances
+* TODO: find splitting point where all jobs past this point will be in the central log location to minimize `scp`s
+
+## *2025-06-16*
+Present: Josh
+
+Worked on `qacct_gpu`:
+1. Based on Katia/Josh check-in discussion:
+* Consider instead having “qacct_gpu” without options behave like “qacct” without options generated an aggregated report, and per job reports created when using “-j” option
+2. Concerned about speed of qacct lookups:
+* `qacct` lookups take about 6 seconds
+* `grep`ing accounting file same speed
+* Discussed Mike's "myqacct" but this doesn't exist. There is "myqstat" and "qacct.pl"
+* "qacct.pl" only allows parsing based on date and nothing else
+* Charlie has "feather" file versions of accoutning info, but these have to be read with R or Python appropriate libraries: https://github.com/wesm/feather
+* Also faster searching tools like https://sift-tool.org/, but probably not significantly faster for simple queries
+* After experimentation decided to stick with current "qacct_gpu" approach for now and revise if speed is an issue
+3. In remaining time started to consider revisions to "qacct_gpu" but nothing major committed
+
 ## *2025-06-02*
 Present: Josh
 
