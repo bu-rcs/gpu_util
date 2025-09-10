@@ -1,0 +1,3 @@
+#!/bin/bash
+
+python3 /share/pkg.8/gpu_report/1.0.0/install/bin/reportgenerator.py "$@"

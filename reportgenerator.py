@@ -1,22 +1,11 @@
 import argparse
-from helpers import *
-import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from matplotlib.backends.backend_pdf import PdfPages
-import seaborn as sns
-import time
-from datetime import datetime
-
-import warnings
-warnings.filterwarnings('ignore')
 
 def parse_arguments():
     """Parse command line arguments for report specs"""
-    parser = argparse.ArgumentParser(description='Generate GPU utilization report')
-    parser.add_argument('-y', '--year', type=str, default="25", 
+    parser = argparse.ArgumentParser(prog='gpu_report', description='Generate GPU utilization report')
+    parser.add_argument('year', type=str, 
                         help='Year (last two digits, e.g. 25)')
-    parser.add_argument('-m', '--month', type=str, default="02", 
+    parser.add_argument('month', type=str,  
                     help='Month (two digits, e.g. 02)')
     parser.add_argument('-o', '--output', type=str, default="gpu_utilization_report.pdf", 
                     help='Output PDF filename')
@@ -29,6 +18,41 @@ def parse_arguments():
 
     return parser.parse_args()
 
+# Parse command line arguments
+args = parse_arguments()
+
+if not isinstance(args.year, str) or not args.year.isdigit() or len(args.year) != 2:
+    raise SystemExit(
+        f"Invalid year format: {args.year}. Expected a two-digit string (e.g., '25' for 2025)."
+    )
+
+# Validate month format
+if not isinstance(args.month, str) or not args.month.isdigit() or len(args.month) != 2:
+    raise SystemExit(
+        f"Invalid month format: {args.month}. Expected a two-digit string (e.g., '01' for January)."
+    )
+
+print(f"""Generating report with options:
+Year: {args.year}
+Month: {args.month}
+Output file: {args.output}
+Project: {args.project}
+User: {args.user}
+Queue: {args.qname}
+
+This may take a moment...""")
+
+from helpers import *
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from matplotlib.backends.backend_pdf import PdfPages
+import seaborn as sns
+import time
+from datetime import datetime
+
+import warnings
+warnings.filterwarnings('ignore')
 
 def create_title_page(pdf, year_month_date, project=None, user=None, qname=None):
     """Create and save the title page"""
@@ -979,9 +1003,6 @@ def create_no_usage_chart_by_class(pdf, year_data):
 
 
 def main():
-    # Parse command line arguments
-    args = parse_arguments()
-
     # Define year and month from arguments
     year, month = args.year, args.month
     
