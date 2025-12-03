@@ -32,8 +32,15 @@ else
 fi
 grep $1 logs > job
 
+# Get col 2 (bus ID) and count unique buses
 ngpus=$(awk '{print $2}' job | sort | uniq | wc -l)
+# Add col 3 (util) and divide by number of rows to get avg
+# Note if there is more than 1 GPU this averages them together
 avg_util=$(awk '{sum+=$3; n++}END{print sum/n;}' job)
+# Wallclock based on "gpustats" rows
+wallclock=$(cat job | wc -l)
+wallclock=$(echo 5*$wallclock/$ngpus | bc)
+# This is a total across ALL GPUs, and therefore could exceed "wallclock"
 idle_time=$(awk '$3 <1.0 { count++ } END { print count*5 }' job)
 peak_vram=$(awk 'NR == 1 || $9 > max { max = $9 } END { print max }' job)
 gpu_type=$(qhost -F gpu_type | grep scc-211 -A 1 | grep gpu_type | cut -d= -f2)
@@ -41,6 +48,7 @@ gpu_type=$(qhost -F gpu_type | grep scc-211 -A 1 | grep gpu_type | cut -d= -f2)
 cat output
 echo "num_gpus    " $ngpus
 echo "gpu_avg_util" $avg_util %
+echo "wallclock   " $wallclock mins
 echo "gpu_idletime" $idle_time mins
 echo "peak_vram   " $peak_vram MB
 echo "gpu_type    " $gpu_type
