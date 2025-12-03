@@ -85,7 +85,7 @@ wallclock=$(echo 5*$wallclock/$ngpus | bc)
 # This is a total across ALL GPUs, and therefore could exceed "wallclock"
 idle_time=$(awk '$3 <1.0 { count++ } END { print count*5 }' job)
 peak_vram=$(awk 'NR == 1 || $9 > max { max = $9 } END { print max }' job)
-gpu_type=$(qhost -F gpu_type | grep scc-211 -A 1 | grep gpu_type | cut -d= -f2)
+gpu_type=$(qhost -F gpu_type | grep $host -A 1 | grep gpu_type | cut -d= -f2)
 
 if [ "$summary" = false ]; then
 	cat<<<"$rec"
