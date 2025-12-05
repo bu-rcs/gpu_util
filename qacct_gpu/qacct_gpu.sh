@@ -48,7 +48,9 @@ rec=$(printf "%s\n" "${record[@]}")
 # only centralizaed once a week.
 host=$(awk '/hostname/ {split($2, a, "."); print a[1]}'  <<<"$rec")
 jobid=$(awk '/jobnumber/ {print $2}' <<<"$rec")
-scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -rq $host:/var/log/gpustats .
+scp -o StrictHostKeyChecking=no -rq $host:/var/log/gpustats .
+# is -r needed here?
+# Rather than copy ALL logs, should we only copy exactly the month's logs needed
 
 # Currently this ignores the possibility of a job that take place over three distinct months
 startdate=$(awk '/start_time/ {$1=""; print $0}'  <<<"$rec")
@@ -77,6 +79,7 @@ else
 	# Add col 3 (util) and divide by number of rows to get avg
 	# Note if there is more than 1 GPU this averages them together
 	avg_util=$(awk '{sum+=$3; n++}END{print sum/n;}' job)
+	gpu_time=$(awk '{sum+=$3; n++}END{print sum;}' job)
 fi
 
 # Wallclock based on "gpustats" rows
@@ -92,7 +95,8 @@ if [ "$summary" = false ]; then
 	echo "num_gpus    " $ngpus
 	echo "gpu_avg_util" $avg_util %
 	echo "wallclock   " $wallclock mins
-	echo "gpu_idletime" $idle_time mins
+	echo "gpu_time    " $gpu_time
+	echo "gpu_idle    " $idle_time mins
 	echo "peak_vram   " $peak_vram MB
 	echo "gpu_type    " $gpu_type
 	echo "=============================================================="
