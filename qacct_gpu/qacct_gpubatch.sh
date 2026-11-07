@@ -3,12 +3,15 @@
 # $ qacct_gpubatch.sh JOBID_FILE > report.txt
 # Example:
 # $ qacct_gpubatch.sh jobids.txt > report.txt
+# $ qacct_gpubatch.sh --csv jobids.txt > report.csv
 #
 # JOBID_FILE holds one job id per line (blanks, junk and repeats are skipped).
 # Prints exactly what "qacct_gpu -j ID" prints for each id, concatenated in
 # the order the ids appear in the file; an array job gives one block per task,
 # as it does there. Ids with no GPU accounting record are listed on stderr
 # along with progress, so redirecting stdout gives a clean report.
+# --csv gives the same as "qacct_gpu --csv -j": a header row, then one row per
+# record.
 #
 # Why not just loop over qacct_gpu? Every qacct call reads the whole
 # accounting file (~7-14 s), so hundreds of ids would take an hour or more.
@@ -22,12 +25,22 @@
 # Requires gawk (mktime, "delete array").
 
 usage() {
-	echo "Usage: ${0##*/} JOBID_FILE" >&2
+	echo "Usage: ${0##*/} [--csv] JOBID_FILE" >&2
 	exit 2
 }
 
-[ $# -eq 1 ] || usage
-idfile=$1
+csv=false
+idfile=
+for a in "$@"; do
+	if [ "$a" = "--csv" ]; then
+		csv=true
+	elif [ -z "$idfile" ]; then
+		idfile=$a
+	else
+		usage
+	fi
+done
+[ -n "$idfile" ] || usage
 [ -r "$idfile" ] || { echo "${0##*/}: cannot read '$idfile'" >&2; exit 1; }
 
 # Create a temp directory to work out of, and always clean it up
@@ -43,7 +56,8 @@ gawk '{gsub(/[[:space:]]/, ""); sub(/^0+/, "")} /^[0-9]+$/ && !seen[$0]++' "$idf
 nids=$(wc -l < "$out_dir/ids")
 [ "$nids" -gt 0 ] || { echo "${0##*/}: no job ids found in '$idfile'" >&2; exit 1; }
 
-# Relevant fields from qacct we want to display (same as qacct_gpu.sh)
+# Relevant fields from qacct we want to display, and in this order the first
+# CSV columns (same as qacct_gpu.sh)
 fields="qname|hostname|owner|jobname|jobnumber|taskid|start_time|end_time|exit_status|cpu"
 
 #=== 1. ONE pass over every GPU record, keeping the requested jobs ============
@@ -192,7 +206,8 @@ while read -r host mon maxend; do
 done < "$out_dir/need"
 
 #=== 4. Aggregate the logs and print, in ONE pass ==============================
-gawk -v summary="$summary" -v plan="$out_dir/plan" -v logmap="$out_dir/logmap" \
+gawk -v summary="$summary" -v csv="$csv" -v fields="$fields" \
+     -v plan="$out_dir/plan" -v logmap="$out_dir/logmap" \
      -v types="$out_dir/types" -v recs="$out_dir/recs" -v bcf="$out_dir/bc" '
 BEGIN {
 	while ((getline line < types) > 0) {
@@ -237,10 +252,16 @@ BEGIN {
 		else T[i] = T[i] line "\n"
 	}
 
-	if (summary == "false")
-		print "=============================================================="
-	else
+	if (summary == "true")
 		print "scale=3; u=0; w=0; d=0; v=0" > bcf
+	else if (csv == "true") {
+		# Header: the displayed qacct fields, then the GPU stats
+		ncol = split(fields, col, "|")
+		hdr = ""
+		for (c = 1; c <= ncol; c++) hdr = hdr col[c] ","
+		print hdr "num_gpus,gpu_avg_util,wallclock,gpu_time,gpu_idle,peak_vram,gpu_type"
+	} else
+		print "=============================================================="
 
 	for (i = 1; i <= N; i++) {
 		h = H[i]
@@ -272,7 +293,21 @@ BEGIN {
 			idlet = id * 5
 		}
 
-		if (summary == "false") {
+		if (summary == "false" && csv == "true") {
+			# Pick each field out by name, so one that is missing
+			# leaves an empty cell instead of shifting the columns after it
+			delete val
+			nl = split(T[i], L, "\n")
+			for (x = 1; x <= nl; x++)
+				if (match(L[x], /^[^ ]+ +/)) {
+					fv = substr(L[x], RLENGTH + 1)
+					sub(/[ \t]+$/, "", fv)
+					val[substr(L[x], 1, index(L[x], " ") - 1)] = fv
+				}
+			row = ""
+			for (c = 1; c <= ncol; c++) row = row csvq(val[col[c]]) ","
+			print row ngpus "," avg "," wall "," gtime "," idlet "," peak "," csvq(gtype[h])
+		} else if (summary == "false") {
 			printf "%s", T[i]
 			print "num_gpus     " ngpus
 			print "gpu_avg_util " avg " %"
@@ -298,14 +333,27 @@ BEGIN {
 		cmd = "bc < \"" bcf "\""
 		while ((cmd | getline r) > 0) res[++nr] = r
 		close(cmd)
-		print "GPU Job Summary:"
-		print "njobs             " njobs
-		print "ntasks            " N
-		print "average util      " res[1] " %"
-		print "average wallclock " res[2] " mins"
-		print "average idletime  " res[3] " mins"
-		print "average peak_vram " res[4] " MB"
+		if (csv == "true") {
+			print "njobs,ntasks,average_util,average_wallclock,average_idletime,average_peak_vram"
+			print njobs "," N "," res[1] "," res[2] "," res[3] "," res[4]
+		} else {
+			print "GPU Job Summary:"
+			print "njobs             " njobs
+			print "ntasks            " N
+			print "average util      " res[1] " %"
+			print "average wallclock " res[2] " mins"
+			print "average idletime  " res[3] " mins"
+			print "average peak_vram " res[4] " MB"
+		}
 	}
+}
+# CSV-quote a value if it contains a comma, double quote or line break
+function csvq(s) {
+	if (s ~ /[",\r\n]/) {
+		gsub(/"/, "\"\"", s)
+		return "\"" s "\""
+	}
+	return s
 }'
 
 echo "${0##*/}: done -- $nrec records" >&2

@@ -4,12 +4,17 @@
 # Examples:
 # $ qacct_gpu -j 6964876          # one job, full detail
 # $ qacct_gpu -o jbevan           # summary over all that user's GPU jobs
+# $ qacct_gpu --csv -o jbevan > jobs.csv
 # This prints selected information from qacct along with some basic GPU
 # usage info. The format is meant to mimic qacct.
 #
 # We always need job level info to get gpu stats, but want to replicate
 # qacct behavior of generating a summary when "-j" is omitted.
 # If the user omits "-j" we set a summary flag and add the "-j" back in.
+#
+# --csv prints CSV instead: a header row, then one row per record (or a single
+# summary row). Columns are named as in the normal output; values carry no
+# units: gpu_avg_util in %, wallclock and gpu_idle in minutes, peak_vram in MB.
 #
 # Restructured for speed (the earlier per-record loop is in git history):
 #   - The old loop spent ~43 ms per record: ~25 forked awk/date/bc/sort
@@ -26,11 +31,23 @@
 # Requires gawk (mktime, "delete array").
 
 usage() {
-	echo "Usage: ${0##*/} <qacct options>   (e.g. -j JOB_ID, or -o USER)" >&2
+	echo "Usage: ${0##*/} [--csv] <qacct options>   (e.g. -j JOB_ID, or -o USER)" >&2
 	exit 2
 }
 
-[ $# -gt 0 ] || usage
+# "--csv" is ours (qacct options all start with a single dash); everything
+# else is passed to qacct untouched
+csv=false
+args=()
+for a in "$@"; do
+	if [ "$a" = "--csv" ]; then
+		csv=true
+	else
+		args+=("$a")
+	fi
+done
+
+[ ${#args[@]} -gt 0 ] || usage
 
 # Create a temp directory to work out of, and always clean it up
 out_dir=$(mktemp -d) || exit 1
@@ -39,17 +56,17 @@ trap 'rm -rf "$out_dir"' EXIT
 # Match "-j" as a whole argument. A substring test on "$*" also fires on
 # things like "-o alice-jones", which would wrongly suppress the summary.
 summary=true
-for a in "$@"; do
+for a in "${args[@]}"; do
 	if [ "$a" = "-j" ]; then
 		summary=false
 		break
 	fi
 done
 
-args=("$@")
 [ "$summary" = true ] && args=(-j "${args[@]}")
 
-# Relevant fields from qacct we want to display. (Fields needed to find the
+# Relevant fields from qacct we want to display, and in this order the first
+# CSV columns. (Fields needed to find the
 # GPU logs are read from qacct's output directly, so editing this is safe.)
 fields="qname|hostname|owner|jobname|jobnumber|taskid|start_time|end_time|exit_status|cpu"
 
@@ -172,7 +189,8 @@ while read -r host mon maxend; do
 done < "$out_dir/need"
 
 #=== 4. Aggregate the logs and print, in ONE pass ==============================
-gawk -v summary="$summary" -v plan="$out_dir/plan" -v logmap="$out_dir/logmap" \
+gawk -v summary="$summary" -v csv="$csv" -v fields="$fields" \
+     -v plan="$out_dir/plan" -v logmap="$out_dir/logmap" \
      -v types="$out_dir/types" -v recs="$out_dir/recs" -v bcf="$out_dir/bc" '
 BEGIN {
 	while ((getline line < types) > 0) {
@@ -217,10 +235,16 @@ BEGIN {
 		else T[i] = T[i] line "\n"
 	}
 
-	if (summary == "false")
-		print "=============================================================="
-	else
+	if (summary == "true")
 		print "scale=3; u=0; w=0; d=0; v=0" > bcf
+	else if (csv == "true") {
+		# Header: the displayed qacct fields, then the GPU stats
+		ncol = split(fields, col, "|")
+		hdr = ""
+		for (c = 1; c <= ncol; c++) hdr = hdr col[c] ","
+		print hdr "num_gpus,gpu_avg_util,wallclock,gpu_time,gpu_idle,peak_vram,gpu_type"
+	} else
+		print "=============================================================="
 
 	for (i = 1; i <= N; i++) {
 		h = H[i]
@@ -252,7 +276,21 @@ BEGIN {
 			idlet = id * 5
 		}
 
-		if (summary == "false") {
+		if (summary == "false" && csv == "true") {
+			# Pick each field out by name, so one that is missing
+			# leaves an empty cell instead of shifting the columns after it
+			delete val
+			nl = split(T[i], L, "\n")
+			for (x = 1; x <= nl; x++)
+				if (match(L[x], /^[^ ]+ +/)) {
+					fv = substr(L[x], RLENGTH + 1)
+					sub(/[ \t]+$/, "", fv)
+					val[substr(L[x], 1, index(L[x], " ") - 1)] = fv
+				}
+			row = ""
+			for (c = 1; c <= ncol; c++) row = row csvq(val[col[c]]) ","
+			print row ngpus "," avg "," wall "," gtime "," idlet "," peak "," csvq(gtype[h])
+		} else if (summary == "false") {
 			printf "%s", T[i]
 			print "num_gpus     " ngpus
 			print "gpu_avg_util " avg " %"
@@ -278,12 +316,25 @@ BEGIN {
 		cmd = "bc < \"" bcf "\""
 		while ((cmd | getline r) > 0) res[++nr] = r
 		close(cmd)
-		print "GPU Job Summary:"
-		print "njobs             " njobs
-		print "ntasks            " N
-		print "average util      " res[1] " %"
-		print "average wallclock " res[2] " mins"
-		print "average idletime  " res[3] " mins"
-		print "average peak_vram " res[4] " MB"
+		if (csv == "true") {
+			print "njobs,ntasks,average_util,average_wallclock,average_idletime,average_peak_vram"
+			print njobs "," N "," res[1] "," res[2] "," res[3] "," res[4]
+		} else {
+			print "GPU Job Summary:"
+			print "njobs             " njobs
+			print "ntasks            " N
+			print "average util      " res[1] " %"
+			print "average wallclock " res[2] " mins"
+			print "average idletime  " res[3] " mins"
+			print "average peak_vram " res[4] " MB"
+		}
 	}
+}
+# CSV-quote a value if it contains a comma, double quote or line break
+function csvq(s) {
+	if (s ~ /[",\r\n]/) {
+		gsub(/"/, "\"\"", s)
+		return "\"" s "\""
+	}
+	return s
 }'
