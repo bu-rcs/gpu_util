@@ -24,6 +24,10 @@
 #   gpu_idle      GPU-minutes under 1% utilization, summed over its GPUs
 #   peak_vram     most GPU memory in use in any one sample, MB
 #   gpu_type      from qhost
+#   gpu_util_each gpu_avg_util for each GPU separately, joined with ";" in
+#                 PCI bus ID order (one value per GPU; empty with no samples)
+#   gpu_idle_each gpu_idle for each GPU separately, same format
+#   gpu_mem       the card's total memory, MB (largest seen, from gpustats)
 #
 # --csv prints CSV instead: a header row, then one row per record (or a single
 # summary row). Columns are named as above, values carry no units, and times

@@ -209,6 +209,11 @@ qg_report() {
 				if (f[3] < 1.0) idle[k]++
 				if (!(k in vmax) || f[9] > vmax[k]) vmax[k] = f[9]    # col 9: vram MB
 				if (!((k, f[2]) in bus)) { bus[k, f[2]] = 1; buses[k] = buses[k] " " f[2] }  # col 2: bus ID
+				# The same per GPU, for gpu_util_each and gpu_idle_each
+				bcnt[k, f[2]]++
+				bsum[k, f[2]] += f[3]
+				if (f[3] < 1.0) bidle[k, f[2]]++
+				if (!(k in mtot) || f[8] > mtot[k]) mtot[k] = f[8]    # col 8: card memory MB
 			}
 			close(path)
 		}
@@ -226,23 +231,37 @@ qg_report() {
 			ncol = split(fields, col, "|")
 			hdr = ""
 			for (c = 1; c <= ncol; c++) hdr = hdr col[c] ","
-			print hdr "num_gpus,gpu_avg_util,wallclock,gpu_time,gpu_idle,peak_vram,gpu_type"
+			print hdr "num_gpus,gpu_avg_util,wallclock,gpu_time,gpu_idle,peak_vram,gpu_type,gpu_util_each,gpu_idle_each,gpu_mem"
 		} else
 			print "=============================================================="
 
 		for (i = 1; i <= N; i++) {
 			h = H[i]
 			nm = split(M[i], ms, " ")
-			n = 0; s = 0; id = 0; ng = 0; havemax = 0
-			delete seen
+			n = 0; s = 0; id = 0; ng = 0; havemax = 0; mem = 0
+			delete seen; delete pc; delete ps; delete pi
 			for (j = 1; j <= nm; j++) {
 				k = h SUBSEP ms[j] SUBSEP K[i]
 				if (!(k in cnt)) continue
 				n += cnt[k]; s += sum[k]; id += idle[k]
 				if (!havemax || vmax[k] > peak) { peak = vmax[k]; havemax = 1 }
+				if (mtot[k] > mem) mem = mtot[k]
 				nb = split(buses[k], bb, " ")
-				for (b = 1; b <= nb; b++)
+				for (b = 1; b <= nb; b++) {
 					if (!(bb[b] in seen)) { seen[bb[b]] = 1; ng++ }
+					pc[bb[b]] += bcnt[k, bb[b]]
+					ps[bb[b]] += bsum[k, bb[b]]
+					pi[bb[b]] += bidle[k, bb[b]]
+				}
+			}
+
+			# Per GPU, in bus ID order, joined with ";" (one value per GPU):
+			# mean utilization % and idle minutes. Empty if no samples.
+			ue = ""; ie = ""
+			nb = asorti(seen, bo)
+			for (b = 1; b <= nb; b++) {
+				ue = ue (b > 1 ? ";" : "") (ps[bo[b]] / pc[bo[b]])
+				ie = ie (b > 1 ? ";" : "") (pi[bo[b]] * 5)
 			}
 
 			# Need to catch the case where the job is too short for it to be
@@ -280,7 +299,7 @@ qg_report() {
 					if (col[c] ~ /_time$/) fv = isotime(fv)
 					row = row csvq(fv) ","
 				}
-				print row ngpus "," avg "," wall "," gtime "," idlet "," peak "," csvq(gtype[h])
+				print row ngpus "," avg "," wall "," gtime "," idlet "," peak "," csvq(gtype[h]) "," ue "," ie "," mem
 			} else if (summary == "false") {
 				printf "%s", T[i]
 				print "num_gpus     " ngpus
@@ -290,6 +309,9 @@ qg_report() {
 				print "gpu_idle     " idlet " mins"
 				print "peak_vram    " peak " MB"
 				print "gpu_type     " gtype[h]
+				print "gpu_util_each " ue " %"
+				print "gpu_idle_each " ie " mins"
+				print "gpu_mem      " mem " MB"
 				print "=============================================================="
 			} else {
 				# Sum the printed per-job values in bc, so the averages are

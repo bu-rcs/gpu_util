@@ -45,7 +45,11 @@ Each script's header documents its usage and output. The metric definitions are 
   in qacct's own format (`%a %b %d %H:%M:%S %Y`). That's why ISO dates are CSV-only, so don't change
   the text-mode time format or the label names without checking it. Besides those, it reads `owner`,
   `qname`, `jobnumber`, `taskid`, `exit_status`, `num_gpus`, `gpu_avg_util`, `gpu_idle`, `peak_vram`,
-  `gpu_type`, and `wallclock` (only if the times won't parse). It does not read `gpu_time`.
+  `gpu_type`, and `wallclock` (only if the times won't parse). It does not read `gpu_time`,
+  `gpu_util_each`, `gpu_idle_each` or `gpu_mem`, and ignores labels it doesn't know.
+- **Known CSV consumer:** `/projectnb/jbrcs/aicr/gpu_user_summary.py` reads columns by name, including
+  `gpu_util_each`, `gpu_idle_each` (";"-separated, one value per GPU) and `gpu_mem`. New columns go at the
+  end of the row so positional readers of the older columns keep working.
 
 ## How it works
 
@@ -168,7 +172,7 @@ These records are reference values for regression checks:
 | `-j 7210786` | 99 tasks on 22 hosts; on scc-x02, tasks 27/35/51/2 have wallclock 40/50/30/0 |
 | `-j 7701258`, tasks 3 and 30 (same host and month) | wallclock 35 and 30. A merging bug shows 65 for both. |
 | `-j 8265759`, tasks 160 and 1600 | task 160 has no samples. A merging bug gives it task 1600's. |
-| `-f …/accounting.2025 -j 2343372` | scc-e02, A6000, 2 GPUs, 6.57292 %, wallclock 720, gpu_time 94.65, peak 10285 MB |
+| `-f …/accounting.2025 -j 2343372` | scc-e02, A6000, 2 GPUs, 6.57292 %, wallclock 720, gpu_time 94.65, peak 10285 MB, gpu_util_each 7.64583;5.5, gpu_idle_each 655;675, gpu_mem 46068 |
 | `-h scc-x02 -b 2610010000 -e 2610310000` (summary) | njobs 111, ntasks 642, util 16.411, wallclock 25, idle 8, vram 753 |
 
 Techniques that worked well:
