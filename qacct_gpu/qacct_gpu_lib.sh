@@ -5,9 +5,12 @@
 # Each script gets its qacct records its own way ("stage 1"), using the awk
 # helpers in QG_AWK, which write three files into the script's temp dir:
 #   recs  the displayed lines of each record, each record preceded by a "\001" line
-#   plan  one line per record: index, host, <jobnumber>.<taskid>, jobnumber, months
+#   plan  one line per record: index, host, <jobnumber>.<taskid>, jobnumber,
+#         months, start (epoch, 0 if it never started), end (epoch, or
+#         9999999999 if unparsable)
 #   need  one line per (host, month) log file: host, month, latest job end (epoch)
-# qg_report then does everything else (stages 2-4).
+# Then qg_gpu_only drops the records of jobs that did not request a GPU, and
+# qg_report does everything else (stages 2-4).
 #
 # Requires gawk (mktime, -e, "delete array").
 
@@ -51,7 +54,7 @@ function epoch(line,   f, t) {
 
 # Write the record held in rec/host/jn/task/st/et to recs and plan, note the
 # log files it needs, then clear it. Needs -v recs=... plan=... need=...
-function flush(   sm, em, y, m, ye, me, months, nm, ms, j, k, e) {
+function flush(   sm, em, y, m, ye, me, months, nm, ms, j, k, e, s) {
 	if (rec != "") {
 		n++
 		printf "\001\n%s", rec > recs
@@ -71,9 +74,10 @@ function flush(   sm, em, y, m, ye, me, months, nm, ms, j, k, e) {
 					if (++m > 12) { m = 1; y++ }
 				}
 		}
-		print n "\t" host "\t" jn "." task "\t" jn "\t" months > plan
 		# An unparsable end time forces a fresh copy from the node
 		e = epoch(et); if (e < 0) e = 9999999999
+		s = epoch(st); if (s < 0) s = 0
+		print n "\t" host "\t" jn "." task "\t" jn "\t" months "\t" s "\t" e > plan
 		nm = split(months, ms, " ")
 		for (j = 1; j <= nm; j++) {
 			k = host " " ms[j]
@@ -109,6 +113,82 @@ function csvq(s) {
 	return s
 }
 '
+
+# The accounting file qacct will read: the argument after -f if given,
+# otherwise the default one. Usage: qg_acct_file <qacct arguments>
+qg_acct_file() {
+	local f=
+	while [ $# -gt 0 ]; do
+		[ "$1" = "-f" ] && [ $# -gt 1 ] && f=$2
+		shift
+	done
+	echo "${f:-${SGE_ROOT:-/usr/local/sge/sge_root}/${SGE_CELL:-default}/common/accounting}"
+}
+
+# Which records are GPU jobs. "qacct -l gpu_c=6.0" matches the resources of
+# the queue/host a job ran on, not what the job asked for, so it also returns
+# CPU-only jobs (e.g. "-l no_gpu=TRUE") that ran on GPU nodes. Only the raw
+# accounting file has the request (field 40, "category"), and a GPU job's
+# says gpus=N. This lists every such record as "<jobnumber>.<taskid> <start
+# epoch>", reading the file once with grep, which is cheap next to qacct and
+# does not depend on its output, so run it in the background alongside it:
+#   qg_gpukeys ACCOUNTING_FILE > "$out_dir/gpukeys" &
+qg_gpukeys() {
+	LC_ALL=C grep -F 'gpus=' "$1" |
+		LC_ALL=C gawk -F: 'NF >= 40 && $40 ~ /(^|[ ,])gpus=[1-9]/ {
+			print $6 "." ($36 == 0 ? "undefined" : $36), $10 }'
+}
+
+# Drop the records whose job did not request a GPU (see qg_gpukeys), then
+# renumber recs/plan and rebuild need from what is left. A record matches a
+# gpukeys line with the same <jobnumber>.<taskid> and a start time within an
+# hour (qacct prints local time; the hour allows for a DST change). The start
+# time is checked because job numbers repeat within one accounting file.
+# Usage: qg_gpu_only OUT_DIR          (needs OUT_DIR/gpukeys)
+qg_gpu_only() {
+	local dir=$1
+	gawk -v plan="$dir/plan" -v recs="$dir/recs" -v need="$dir/need" \
+	     -v np="$dir/plan.new" -v nr="$dir/recs.new" -v dropped="$dir/dropped" '
+	BEGIN {
+		while ((getline l < plan) > 0) {
+			split(l, p, "\t")
+			W[p[3]] = W[p[3]] " " p[1] ":" p[6]
+		}
+		close(plan)
+	}
+	# gpukeys lines: <jobnumber>.<taskid> <start epoch>
+	($1 in W) {
+		nc = split(W[$1], c, " ")
+		for (i = 1; i <= nc; i++) {
+			split(c[i], x, ":")
+			d = $2 - x[2]; if (d < 0) d = -d
+			if (d <= 3600) K[x[1]] = 1
+		}
+	}
+	END {
+		printf "" > nr; printf "" > np; printf "" > dropped
+		i = 0
+		while ((getline l < recs) > 0) {
+			if (l == "\001") { i++; if (i in K) print l > nr; continue }
+			if (i in K) print l > nr
+		}
+		n = 0
+		while ((getline l < plan) > 0) {
+			split(l, p, "\t")
+			if (!(p[1] in K)) { print p[3] > dropped; continue }
+			sub(/^[^\t]*/, ++n, l)
+			print l > np
+			nm = split(p[5], ms, " ")
+			for (j = 1; j <= nm; j++) {
+				k = p[2] " " ms[j]
+				if (!(k in mx) || p[7] + 0 > mx[k]) mx[k] = p[7] + 0
+			}
+		}
+		printf "" > need
+		for (k in mx) print k, mx[k] > need
+	}' "$dir/gpukeys" &&
+	mv "$dir/plan.new" "$dir/plan" && mv "$dir/recs.new" "$dir/recs"
+}
 
 # Stages 2-4: GPU types, find the logs, aggregate them and print.
 # Usage: qg_report OUT_DIR SUMMARY CSV        (SUMMARY and CSV: true or false)

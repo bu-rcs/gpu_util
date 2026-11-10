@@ -54,9 +54,11 @@ Each script's header documents its usage and output. The metric definitions are 
 ## How it works
 
 1. **Stage 1 (per script)** gets `qacct -l gpu_c=6.0 ... -j` output and splits it on the `=====`
-   separators. Using the awk helpers in `QG_AWK`, it writes three files into a temp dir:
+   separators. Meanwhile `qg_gpukeys` lists the records that requested GPUs, and afterwards
+   `qg_gpu_only` drops the rest (CPU-only jobs on GPU nodes; see "SGE accounting" below). Using the awk helpers in `QG_AWK`, it writes three files into a temp dir:
    - `recs`: the displayed lines of each record.
-   - `plan`: one line per record, with its host, the `<jobnumber>.<taskid>` key and the months it spans.
+   - `plan`: one line per record, with its host, the `<jobnumber>.<taskid>` key, the months it spans,
+     and its start and end times (epoch).
    - `need`: one line per needed `(host, month)` log, with the latest job end time among the
      records that need it.
 
@@ -92,9 +94,22 @@ Only stage 1 differs between the scripts. Everything else is in `qacct_gpu_lib.s
   years (back to 2013) in `/usr/local/sge/sge_root/default/common/`. Without `-f`, last year's jobs
   are "not found". Job numbers aren't a safe key across years: pair an id with the file it came from.
   (Dec 2025 ids were ~2.34M; Jul–Nov 2026 ids ran ~6.6M–8.4M.)
-- **`-l gpu_c=6.0` is how GPU jobs are selected.** This was inherited from the original script
-  and hasn't been verified to match every GPU job. Several `-l` options are ANDed (checked:
-  `-l gpu_c=6.0 -l gpu_type=V100` hides a P100 job).
+- **`qacct -l` matches the queue/host a job ran on, not what the job requested.** So
+  `-l gpu_c=6.0` (inherited from the original script) returns *every* job that ran on a GPU node,
+  including CPU-only jobs (`-l no_gpu=TRUE`) in GPU queues. On a 1-GPU node, `-l gpus=1` matched a
+  CPU job and `-l gpus=5` did not. Some users' "GPU jobs" were 100% CPU jobs (Nov 2026: 26k of 140k
+  records across 67 users). Several `-l` options are ANDed (checked: `-l gpu_c=6.0 -l gpu_type=V100`
+  hides a P100 job).
+- **So a GPU job is one whose request contains `gpus=N`, N ≥ 1.** qacct doesn't print the request,
+  but the raw accounting file has it in field 40 (`category`), e.g.
+  `-l gpu_compute_capability=3.5,gpus=1,h_rt=259200 ...` vs `-l h_rt=43200,no_gpu=TRUE ...`.
+  Values seen: `gpus=1`…`gpus=8` and `gpus=1.0`. `qg_gpukeys` greps the file for `gpus=` in the
+  background while qacct runs (≈14 s, mostly I/O, so it adds no wall time), and `qg_gpu_only` keeps
+  the qacct records that match one. Checked on 10 users: every dropped record lacked GPU samples.
+- **Job numbers repeat within one accounting file.** `accounting.2025` has two jobs numbered 2343372:
+  a CPU job of one user in January and a 2-GPU job of another in December. Match raw lines on
+  job number, task **and** start time (the code allows ±1 h for DST). Raw field 36 is the task id,
+  0 for a non-array job (qacct: `undefined`); field 10 is the start time in epoch seconds.
 - **When nothing matches:** an unknown job id gives `error: job id N not found` and exit 1. A filter
   that excludes everything prints **nothing, with exit 0**.
 - **Array jobs are the majority:** 327,826 of 593,871 GPU records (Aug 2026) were array tasks. Each
@@ -173,7 +188,8 @@ These records are reference values for regression checks:
 | `-j 7701258`, tasks 3 and 30 (same host and month) | wallclock 35 and 30. A merging bug shows 65 for both. |
 | `-j 8265759`, tasks 160 and 1600 | task 160 has no samples. A merging bug gives it task 1600's. |
 | `-f …/accounting.2025 -j 2343372` | scc-e02, A6000, 2 GPUs, 6.57292 %, wallclock 720, gpu_time 94.65, peak 10285 MB, gpu_util_each 7.64583;5.5, gpu_idle_each 655;675, gpu_mem 46068 |
-| `-h scc-x02 -b 2610010000 -e 2610310000` (summary) | njobs 111, ntasks 642, util 16.411, wallclock 25, idle 8, vram 753 |
+| `-h scc-x02 -b 2610010000 -e 2610310000` (summary) | njobs 101, ntasks 529, util 19.917, wallclock 30, idle 9, vram 914. (Before CPU jobs were dropped: 111, 642, 16.411, 25, 8, 753; the 113 records dropped, 111 by one user, had no GPU samples.) |
+| `-j 5720836` (lzgan, `no_gpu=TRUE`, ran on GPU node scc-b04) | `no matching GPU job records`. Before the fix it was listed as a GPU job with zero samples. |
 
 Techniques that worked well:
 
@@ -204,3 +220,5 @@ Techniques that worked well:
   seconds) for run time.
 - If a node's logs are gone and the archive lacks the month, that job's stats are zeros, with a
   warning on stderr.
+- A job that requested a GPU only as a soft request (`-soft -l gpus=1`) counts as a GPU job whether
+  or not it got one. None were seen.

@@ -12,6 +12,9 @@
 # qacct behavior of generating a summary when "-j" is omitted.
 # If the user omits "-j" we set a summary flag and add the "-j" back in.
 #
+# A GPU job is one whose resource request includes gpus=N (read from the raw
+# accounting file); CPU-only jobs that ran on GPU nodes are left out.
+#
 # Besides the qacct fields (ru_wallclock is qacct's exact run time, in
 # seconds), each record gets these, from the nodes' gpustats logs, which
 # sample every GPU every 5 minutes:
@@ -82,7 +85,11 @@ done
 
 #=== 1. ONE pass over qacct's output ===========================================
 # Records are split on the "=====" separators, so a record missing a field
-# can't knock the following records out of step.
+# can't knock the following records out of step. Meanwhile, list the records
+# that requested a GPU (qg_gpukeys), to drop CPU-only jobs on GPU nodes after.
+acct=$(qg_acct_file "${args[@]}")
+qg_gpukeys "$acct" > "$out_dir/gpukeys" 2>"$out_dir/gpukeys_err" &
+gk_pid=$!
 qacct -l gpu_c=6.0 "${args[@]}" 2>"$out_dir/qacct_err" |
 	gawk -v fields="$QG_FIELDS" -v recs="$out_dir/recs" -v plan="$out_dir/plan" \
 	     -v need="$out_dir/need" -e "$QG_AWK" -e '
@@ -90,6 +97,15 @@ qacct -l gpu_c=6.0 "${args[@]}" 2>"$out_dir/qacct_err" |
 	/^=+$/ { flush(); next }
 	{ qg_line() }
 	END { flush(); qg_finish() }'
+
+# grep exits 1 when nothing matches, which is fine; anything else is not
+wait "$gk_pid"
+if [ $? -gt 1 ] || [ -s "$out_dir/gpukeys_err" ]; then
+	cat "$out_dir/gpukeys_err" >&2
+	echo "${0##*/}: cannot tell GPU jobs from CPU jobs: failed to read $acct" >&2
+	exit 1
+fi
+qg_gpu_only "$out_dir" || exit 1
 
 if [ ! -s "$out_dir/plan" ]; then
 	# Surface qacct's own complaint ("job id N not found", etc.)

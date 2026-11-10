@@ -88,6 +88,9 @@ if [ ${#qargs[@]} -gt 0 ]; then
 else
 	echo "${0##*/}: $nids job ids -- reading every GPU record (a few minutes; qacct options after the file, e.g. -b YYMMDDhhmm, narrow it)..." >&2
 fi
+acct=$(qg_acct_file "${qargs[@]}")
+qg_gpukeys "$acct" > "$out_dir/gpukeys" 2>"$out_dir/gpukeys_err" &
+gk_pid=$!
 qacct -l gpu_c=6.0 "${qargs[@]}" -j 2>"$out_dir/qacct_err" |
 	gawk -v idfile="$out_dir/ids" -v fields="$QG_FIELDS" -v recs="$out_dir/recs" \
 	     -v plan="$out_dir/plan" -v need="$out_dir/need" -v missing="$out_dir/missing" \
@@ -122,14 +125,27 @@ qacct -l gpu_c=6.0 "${qargs[@]}" -j 2>"$out_dir/qacct_err" |
 		rec = host = jn = task = st = et = ""
 	}'
 
+# Drop CPU-only jobs that ran on GPU nodes (see qg_gpukeys); an id left
+# with no records joins the missing list, in id-file order
+wait "$gk_pid"
+if [ $? -gt 1 ] || [ -s "$out_dir/gpukeys_err" ]; then
+	cat "$out_dir/gpukeys_err" >&2
+	echo "${0##*/}: cannot tell GPU jobs from CPU jobs: failed to read $acct" >&2
+	exit 1
+fi
+qg_gpu_only "$out_dir" || exit 1
+cut -f4 "$out_dir/plan" | sort -u > "$out_dir/kept"
+gawk -v kept="$out_dir/kept" 'BEGIN { while ((getline k < kept) > 0) K[k] = 1 } !($0 in K)' \
+	"$out_dir/ids" > "$out_dir/missing"
+
 nrec=$(wc -l < "$out_dir/plan")
 nmiss=$(wc -l < "$out_dir/missing")
 echo "${0##*/}: matched $((nids - nmiss)) of $nids ids ($nrec records)" >&2
 if [ "$nmiss" -gt 0 ]; then
 	if [ ${#qargs[@]} -gt 0 ]; then
-		why="not a GPU job, or not matched by: ${qargs[*]}"
+		why="not a GPU job (no gpus= request), or not matched by: ${qargs[*]}"
 	else
-		why="not a GPU job, or older than the current accounting file"
+		why="not a GPU job (no gpus= request), or older than the current accounting file"
 	fi
 	echo "${0##*/}: no GPU accounting record ($why) for $nmiss id(s):" >&2
 	fmt -w 76 "$out_dir/missing" | sed 's/^/  /' >&2
