@@ -46,9 +46,9 @@ Each script's header documents its usage and output. The metric definitions are 
   the text-mode time format or the label names without checking it. Besides those, it reads `owner`,
   `qname`, `jobnumber`, `taskid`, `exit_status`, `num_gpus`, `gpu_avg_util`, `gpu_idle`, `peak_vram`,
   `gpu_type`, and `wallclock` (only if the times won't parse). It does not read `gpu_time`,
-  `gpu_util_each`, `gpu_idle_each` or `gpu_mem`, and ignores labels it doesn't know.
+  `gpu_util_each`, `gpu_idle_each`, `gpu_mem` or `job_type`, and ignores labels it doesn't know.
 - **Known CSV consumer:** `/projectnb/jbrcs/aicr/gpu_user_summary.py` reads columns by name, including
-  `gpu_util_each`, `gpu_idle_each` (";"-separated, one value per GPU) and `gpu_mem`. New columns go at the
+  `gpu_util_each`, `gpu_idle_each` (";"-separated, one value per GPU), `gpu_mem` and `job_type`. New columns go at the
   end of the row so positional readers of the older columns keep working.
 
 ## How it works
@@ -106,6 +106,13 @@ Only stage 1 differs between the scripts. Everything else is in `qacct_gpu_lib.s
   Values seen: `gpus=1`…`gpus=8` and `gpus=1.0`. `qg_gpukeys` greps the file for `gpus=` in the
   background while qacct runs (≈14 s, mostly I/O, so it adds no wall time), and `qg_gpu_only` keeps
   the qacct records that match one. Checked on 10 users: every dropped record lacked GPU samples.
+- **Interactive jobs (`job_type`).** SGE adds `-I y` to the request of `qrsh`/`qlogin` jobs, so
+  `qg_gpukeys` also reports that flag. Job names: plain `qrsh` sessions are `QRLOGIN`, `qlogin`
+  sessions `QLOGIN`, `qrsh <command>` jobs are named after the command (`bash`, `env`, a script),
+  OnDemand apps `ood-<app>` (submitted as ordinary batch jobs, never `-I y`). In 2026, 2,766 of
+  10,828 QRLOGIN GPU records lacked `-I y` (cause unknown, spread over the year and many users),
+  and 554 `-I y` records had other names. So `job_type` is `qrsh` if `-I y` or the name is
+  QRLOGIN/QLOGIN, `ood` if the name starts with `ood-`, else `batch`.
 - **Job numbers repeat within one accounting file.** `accounting.2025` has two jobs numbered 2343372:
   a CPU job of one user in January and a 2-GPU job of another in December. Match raw lines on
   job number, task **and** start time (the code allows ±1 h for DST). Raw field 36 is the task id,
@@ -189,6 +196,7 @@ These records are reference values for regression checks:
 | `-j 8265759`, tasks 160 and 1600 | task 160 has no samples. A merging bug gives it task 1600's. |
 | `-f …/accounting.2025 -j 2343372` | scc-e02, A6000, 2 GPUs, 6.57292 %, wallclock 720, gpu_time 94.65, peak 10285 MB, gpu_util_each 7.64583;5.5, gpu_idle_each 655;675, gpu_mem 46068 |
 | `-h scc-x02 -b 2610010000 -e 2610310000` (summary) | njobs 101, ntasks 529, util 19.917, wallclock 30, idle 9, vram 914. (Before CPU jobs were dropped: 111, 642, 16.411, 25, 8, 753; the 113 records dropped, 111 by one user, had no GPU samples.) |
+| `job_type`: `-j 4600826` / `4603300` / `4623092` / `2533172` / `4600139` | batch / qrsh (QRLOGIN) / qrsh (QLOGIN) / qrsh (`binary_search.sh`, only `-I y` says so) / ood (ood-jupyter). 6964876 is ood (ood-desktop). |
 | `-j 5720836` (lzgan, `no_gpu=TRUE`, ran on GPU node scc-b04) | `no matching GPU job records`. Before the fix it was listed as a GPU job with zero samples. |
 
 Techniques that worked well:

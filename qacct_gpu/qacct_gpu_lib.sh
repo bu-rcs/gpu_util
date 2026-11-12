@@ -7,7 +7,8 @@
 #   recs  the displayed lines of each record, each record preceded by a "\001" line
 #   plan  one line per record: index, host, <jobnumber>.<taskid>, jobnumber,
 #         months, start (epoch, 0 if it never started), end (epoch, or
-#         9999999999 if unparsable)
+#         9999999999 if unparsable); qg_gpu_only appends 1 if the job was
+#         submitted as interactive (-I y), else 0
 #   need  one line per (host, month) log file: host, month, latest job end (epoch)
 # Then qg_gpu_only drops the records of jobs that did not request a GPU, and
 # qg_report does everything else (stages 2-4).
@@ -130,13 +131,14 @@ qg_acct_file() {
 # CPU-only jobs (e.g. "-l no_gpu=TRUE") that ran on GPU nodes. Only the raw
 # accounting file has the request (field 40, "category"), and a GPU job's
 # says gpus=N. This lists every such record as "<jobnumber>.<taskid> <start
-# epoch>", reading the file once with grep, which is cheap next to qacct and
+# epoch> <interactive>", where interactive is 1 if the request also has
+# "-I y", which SGE adds to qrsh/qlogin jobs. It reads the file once with grep, which is cheap next to qacct and
 # does not depend on its output, so run it in the background alongside it:
 #   qg_gpukeys ACCOUNTING_FILE > "$out_dir/gpukeys" &
 qg_gpukeys() {
 	LC_ALL=C grep -F 'gpus=' "$1" |
 		LC_ALL=C gawk -F: 'NF >= 40 && $40 ~ /(^|[ ,])gpus=[1-9]/ {
-			print $6 "." ($36 == 0 ? "undefined" : $36), $10 }'
+			print $6 "." ($36 == 0 ? "undefined" : $36), $10, ($40 ~ /(^| )-I y( |$)/ ? 1 : 0) }'
 }
 
 # Drop the records whose job did not request a GPU (see qg_gpukeys), then
@@ -156,13 +158,13 @@ qg_gpu_only() {
 		}
 		close(plan)
 	}
-	# gpukeys lines: <jobnumber>.<taskid> <start epoch>
+	# gpukeys lines: <jobnumber>.<taskid> <start epoch> <interactive>
 	($1 in W) {
 		nc = split(W[$1], c, " ")
 		for (i = 1; i <= nc; i++) {
 			split(c[i], x, ":")
 			d = $2 - x[2]; if (d < 0) d = -d
-			if (d <= 3600) K[x[1]] = 1
+			if (d <= 3600) { K[x[1]] = 1; if ($3 == 1) IY[x[1]] = 1 }
 		}
 	}
 	END {
@@ -177,7 +179,7 @@ qg_gpu_only() {
 			split(l, p, "\t")
 			if (!(p[1] in K)) { print p[3] > dropped; continue }
 			sub(/^[^\t]*/, ++n, l)
-			print l > np
+			print l "\t" (p[1] in IY ? 1 : 0) > np
 			nm = split(p[5], ms, " ")
 			for (j = 1; j <= nm; j++) {
 				k = p[2] " " ms[j]
@@ -266,7 +268,7 @@ qg_report() {
 		while ((getline line < plan) > 0) {
 			split(line, p, "\t")
 			i = p[1] + 0; N = i
-			H[i] = p[2]; K[i] = p[3]; M[i] = p[5]
+			H[i] = p[2]; K[i] = p[3]; M[i] = p[5]; IA[i] = p[8] + 0
 			if (!(p[4] in seenjob)) { seenjob[p[4]] = 1; njobs++ }
 			nm = split(p[5], ms, " ")
 			for (j = 1; j <= nm; j++) want[p[2], ms[j], p[3]] = 1
@@ -311,7 +313,7 @@ qg_report() {
 			ncol = split(fields, col, "|")
 			hdr = ""
 			for (c = 1; c <= ncol; c++) hdr = hdr col[c] ","
-			print hdr "num_gpus,gpu_avg_util,wallclock,gpu_time,gpu_idle,peak_vram,gpu_type,gpu_util_each,gpu_idle_each,gpu_mem"
+			print hdr "num_gpus,gpu_avg_util,wallclock,gpu_time,gpu_idle,peak_vram,gpu_type,gpu_util_each,gpu_idle_each,gpu_mem,job_type"
 		} else
 			print "=============================================================="
 
@@ -334,6 +336,18 @@ qg_report() {
 					pi[bb[b]] += bidle[k, bb[b]]
 				}
 			}
+
+			# job_type: qrsh for an interactive qrsh/qlogin session (submitted
+			# with -I y, or named QRLOGIN/QLOGIN: some QRLOGIN records lack
+			# -I y), ood for an OnDemand app (named ood-...), else batch
+			jname = ""
+			if (match(T[i], /(^|\n)jobname +[^\n]*/)) {
+				jname = substr(T[i], RSTART, RLENGTH)
+				sub(/^\n?jobname +/, "", jname); sub(/[ \t]+$/, "", jname)
+			}
+			if (IA[i] || jname == "QRLOGIN" || jname == "QLOGIN") jtype = "qrsh"
+			else if (jname ~ /^ood-/) jtype = "ood"
+			else jtype = "batch"
 
 			# Per GPU, in bus ID order, joined with ";" (one value per GPU):
 			# mean utilization % and idle minutes. Empty if no samples.
@@ -379,7 +393,7 @@ qg_report() {
 					if (col[c] ~ /_time$/) fv = isotime(fv)
 					row = row csvq(fv) ","
 				}
-				print row ngpus "," avg "," wall "," gtime "," idlet "," peak "," csvq(gtype[h]) "," ue "," ie "," mem
+				print row ngpus "," avg "," wall "," gtime "," idlet "," peak "," csvq(gtype[h]) "," ue "," ie "," mem "," jtype
 			} else if (summary == "false") {
 				printf "%s", T[i]
 				print "num_gpus     " ngpus
@@ -392,6 +406,7 @@ qg_report() {
 				print "gpu_util_each " ue " %"
 				print "gpu_idle_each " ie " mins"
 				print "gpu_mem      " mem " MB"
+				print "job_type     " jtype
 				print "=============================================================="
 			} else {
 				# Sum the printed per-job values in bc, so the averages are

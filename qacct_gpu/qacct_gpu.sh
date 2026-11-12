@@ -31,6 +31,9 @@
 #                 PCI bus ID order (one value per GPU; empty with no samples)
 #   gpu_idle_each gpu_idle for each GPU separately, same format
 #   gpu_mem       the card's total memory, MB (largest seen, from gpustats)
+#   job_type      qrsh (interactive qrsh/qlogin session: submitted with -I y,
+#                 or named QRLOGIN/QLOGIN), ood (OnDemand app: named ood-...),
+#                 or batch
 #
 # --csv prints CSV instead: a header row, then one row per record (or a single
 # summary row). Columns are named as above, values carry no units, and times
